@@ -5,7 +5,6 @@ import jakarta.annotation.PreDestroy;
 import org.springframework.beans.factory.BeanNameAware;
 import org.springframework.stereotype.Component;
 
-// @Component
 public class OrderService {
     private final PaymentService paymentService;
 
