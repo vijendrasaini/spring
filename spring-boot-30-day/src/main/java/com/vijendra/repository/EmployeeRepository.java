@@ -26,20 +26,51 @@ public class EmployeeRepository {
                 """;
         try(
                 Connection connection = DriverManager.getConnection(this.dbHost, this.dbUser, this.dbPassword);
-                PreparedStatement ps = connection.prepareStatement(query);
+                PreparedStatement ps = connection.prepareStatement(query, Statement.RETURN_GENERATED_KEYS);
                 ) {
 
             ps.setString(1, employee.getName());
             ps.setString(2, employee.getEmail());
-            ps.setDouble(3, employee.getSalary());
+            ps.setBigDecimal(3, employee.getSalary());
             ps.setString(4, employee.getDepartment());
 
             int rowsAffected = ps.executeUpdate();
+            if(rowsAffected == 1) {
+                try(ResultSet rs = ps.getGeneratedKeys()) {
+                    rs.next();
+                    employee.setId(rs.getInt(1));
+                }
 
-            return employee;
+                return employee;
+            }
+
+            System.out.println("Employee could not be inserted into the table.");
+            return null;
         } catch (SQLException e) {
 
             System.out.println("Error while cretaing the Employee : " + e.getMessage());
+            return null;
+        }
+    }
+
+    public Employee updateByName(int id, String name) {
+        String query = "update employees set name = ? where id = ?";
+
+        try(
+                Connection connection = DriverManager.getConnection(this.dbHost, this.dbUser, this.dbPassword);
+                PreparedStatement ps = connection.prepareStatement(query);
+        ) {
+            ps.setInt(2, id);
+            ps.setString(1, name);
+
+            int rowAffected = ps.executeUpdate();
+            if(rowAffected == 1) {
+                return get(id);
+            }
+
+            return null;
+        } catch(SQLException e) {
+            System.out.println("Employee with id " + id + " couldn't be updated. Error : " + e.getMessage());
             return null;
         }
     }
@@ -111,7 +142,7 @@ public class EmployeeRepository {
     public Employee mapEmployee(ResultSet rs) throws SQLException {
         Employee employee = new Employee(rs.getString("name"), rs.getString("email"));
 
-        employee.setSalary(rs.getDouble("salary"));
+        employee.setSalary(rs.getBigDecimal("salary"));
         employee.setDepartment(rs.getString("department"));
         employee.setId(rs.getInt("id"));
         return employee;
