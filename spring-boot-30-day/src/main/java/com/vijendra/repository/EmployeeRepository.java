@@ -50,9 +50,9 @@ public class EmployeeRepository {
                 PreparedStatement ps = connection.prepareStatement(query);
                 ) {
             ps.setInt(1, employeeId);
-            ResultSet res = ps.executeQuery();
-
-            return mapEmployee(res);
+            try(ResultSet res = ps.executeQuery()) {
+                return mapEmployee(res);
+            }
         } catch(SQLException e) {
             System.out.println("Error while getting Emoplyee. Error : " + e.getMessage());
             return null;
