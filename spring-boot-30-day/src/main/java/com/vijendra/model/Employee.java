@@ -1,12 +1,14 @@
 package com.vijendra.model;
 
+import java.math.BigDecimal;
+
 public class Employee {
 
-    public int id;
-    public String name;
-    public String email;
-    public double salary;
-    public String department;
+    private int id;
+    private String name;
+    private String email;
+    private BigDecimal salary;
+    private String department;
 
     public Employee(String name, String email) {
         this.name = name;
@@ -25,7 +27,7 @@ public class Employee {
         return email;
     }
 
-    public double getSalary() {
+    public BigDecimal getSalary() {
         return salary;
     }
 
@@ -45,7 +47,7 @@ public class Employee {
         this.email = email;
     }
 
-    public void setSalary(double salary) {
+    public void setSalary(BigDecimal salary) {
         this.salary = salary;
     }
 
