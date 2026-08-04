@@ -4,6 +4,7 @@ import com.vijendra.model.Employee;
 import com.vijendra.repository.EmployeeRepository;
 import com.vijendra.service.EmployeeService;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 //TIP To <b>Run</b> code, press <shortcut actionId="Run"/> or
@@ -16,10 +17,24 @@ public class Main {
 
 /*        createEmployee("Ram", "ram@gmail.com", "IT", 10000.00);*/
 /*        createEmployee("Laxman", "laxman@gmail.com", "HR", 20000.00);*/
-/*        createEmployee("Hanuma", "hanumal@gmail.com", "Sales", 50000.50);*/
+        createEmployee("Bhisma 2", "bhisma2@gmail.com", "HR", new BigDecimal("95000.99"));
         /*        getEmployee(1);*/
 /*        deleteEmployee(5); // delete Hanuman*/
-        getAllEmployees();
+/*        getAllEmployees();*/
+/*        updateEmployee(6, "Hanuman Dada");*/
+    }
+
+    public static void updateEmployee(int id, String name) {
+        // update the name
+        Employee employee = employeeService.updateEmployeeName(id, name);
+        if(employee != null) {
+            System.out.println("--------------Updated Employee-------------");
+            System.out.println("Employee id : " + id);
+            System.out.println("Employee Name : " + employee.getName());
+            return;
+        }
+
+        System.out.println("Employeed with id : " + id + " couldn't be updated");
     }
     public static void getAllEmployees() {
         List<Employee> employeeList = employeeService.getAllEmployees();
@@ -40,7 +55,7 @@ public class Main {
         System.out.println("Employee with Id " + id + " couldn't be deleted");
     }
 
-    public static void createEmployee(String name, String email, String department, double salary) {
+    public static void createEmployee(String name, String email, String department, BigDecimal salary) {
         // Create Emp
         Employee employee1 = new Employee(name, email);
         employee1.setDepartment(department);
@@ -48,6 +63,7 @@ public class Main {
 
         Employee employeeResult = employeeService.create(employee1);
         if(employeeResult != null) {
+            System.out.println("Created employee id: " + employeeResult.getId());
             System.out.println("Created employee name: " + employeeResult.getName());
             return;
         }
