@@ -12,18 +12,34 @@ public class Main {
     static EmployeeService employeeService = new EmployeeService(employeeRepository);
     static void main() {
 
-/*        createEmployee();*/
-        getEmployee(1);
+/*        createEmployee("Ram", "ram@gmail.com", "IT", 10000.00);*/
+/*        createEmployee("Laxman", "laxman@gmail.com", "HR", 20000.00);*/
+/*        createEmployee("Hanuma", "hanumal@gmail.com", "Sales", 50000.50);*/
+        /*        getEmployee(1);*/
+        deleteEmployee(5); // delete Hanuman
     }
+    public static void deleteEmployee(int id) {
+        boolean deleteResult = employeeService.deleteEmployee(id);
+        if(deleteResult) {
+            System.out.println("Employee with id : " + id + " has been deleted");
+            return;
+        }
 
-    public static void createEmployee() {
+        System.out.println("Employee with Id " + id + " couldn't be deleted");
+    }
+    public static void createEmployee(String name, String email, String department, double salary) {
         // Create Emp
-        Employee employee1 = new Employee("Ram", "ram@gmail.com");
-        employee1.setDepartment("IT");
-        employee1.setSalary(10000);
+        Employee employee1 = new Employee(name, email);
+        employee1.setDepartment(department);
+        employee1.setSalary(salary);
 
         Employee employeeResult = employeeService.create(employee1);
-        System.out.println("Created employee : " + employeeResult);
+        if(employeeResult != null) {
+            System.out.println("Created employee name: " + employeeResult.getName());
+            return;
+        }
+
+        System.out.println("Something is wronge.");
     }
 
     public static void getEmployee(int id) {

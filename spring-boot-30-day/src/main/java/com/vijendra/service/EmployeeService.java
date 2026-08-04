@@ -17,4 +17,8 @@ public class EmployeeService {
     public Employee getEmployee(int employeeId) {
         return this.employeeRepository.get(employeeId);
     }
+
+    public boolean deleteEmployee(int employeeId) {
+        return this.employeeRepository.delete(employeeId);
+    }
 }

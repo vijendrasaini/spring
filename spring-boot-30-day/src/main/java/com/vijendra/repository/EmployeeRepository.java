@@ -59,6 +59,27 @@ public class EmployeeRepository {
         }
     }
 
+    public boolean delete(int employeeId) {
+        String query = "delete from employees where id = ?";
+
+        try(
+                Connection connection = DriverManager.getConnection(this.dbHost, this.dbUser, this.dbPassword);
+                PreparedStatement ps = connection.prepareStatement(query);
+                ) {
+            ps.setInt(1, employeeId);
+            int affectedCount = ps.executeUpdate();
+            if(affectedCount == 1) {
+                return true;
+            }
+
+            System.out.println("Employee with ID : " + employeeId + " not found.");
+            return false;
+        } catch(SQLException e) {
+            System.out.println("Error while getting Emoplyee. Error : " + e.getMessage());
+            return false;
+        }
+    }
+
     public Employee mapEmployee(ResultSet rs) throws SQLException {
         Employee employee = null;
         if(rs.next()) {
