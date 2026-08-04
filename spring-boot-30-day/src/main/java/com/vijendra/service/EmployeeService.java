@@ -27,4 +27,8 @@ public class EmployeeService {
     public List<Employee> getAllEmployees() {
         return this.employeeRepository.getAll();
     }
+
+    public Employee updateEmployeeName(int id, String name) {
+        return this.employeeRepository.updateByName(id, name);
+    }
 }
