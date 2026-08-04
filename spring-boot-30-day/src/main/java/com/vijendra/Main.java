@@ -1,17 +1,39 @@
 package com.vijendra;
 
+import com.vijendra.model.Employee;
+import com.vijendra.repository.EmployeeRepository;
+import com.vijendra.service.EmployeeService;
+
 //TIP To <b>Run</b> code, press <shortcut actionId="Run"/> or
 // click the <icon src="AllIcons.Actions.Execute"/> icon in the gutter.
 public class Main {
-    static void main() {
-        //TIP Press <shortcut actionId="ShowIntentionActions"/> with your caret at the highlighted text
-        // to see how IntelliJ IDEA suggests fixing it.
-        IO.println(String.format("Hello and welcome!"));
 
-        for (int i = 1; i <= 5; i++) {
-            //TIP Press <shortcut actionId="Debug"/> to start debugging your code. We have set one <icon src="AllIcons.Debugger.Db_set_breakpoint"/> breakpoint
-            // for you, but you can always add more by pressing <shortcut actionId="ToggleLineBreakpoint"/>.
-            IO.println("i = " + i);
+    static EmployeeRepository employeeRepository = new EmployeeRepository();
+    static EmployeeService employeeService = new EmployeeService(employeeRepository);
+    static void main() {
+
+/*        createEmployee();*/
+        getEmployee(1);
+    }
+
+    public static void createEmployee() {
+        // Create Emp
+        Employee employee1 = new Employee("Ram", "ram@gmail.com");
+        employee1.setDepartment("IT");
+        employee1.setSalary(10000);
+
+        Employee employeeResult = employeeService.create(employee1);
+        System.out.println("Created employee : " + employeeResult);
+    }
+
+    public static void getEmployee(int id) {
+        Employee employee = employeeService.getEmployee(id);
+        if(employee != null) {
+            System.out.println("Employee ID : " + employee.getId());
+            System.out.println("Employee Name : " + employee.getName());
+            return;
         }
+
+        System.out.println("No employee found with the give id : " + id);
     }
 }
