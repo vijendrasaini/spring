@@ -3,6 +3,8 @@ package com.vijendra.service;
 import com.vijendra.repository.EmployeeRepository;
 import com.vijendra.model.Employee;
 
+import java.util.List;
+
 public class EmployeeService {
     private final EmployeeRepository employeeRepository;
 
@@ -20,5 +22,9 @@ public class EmployeeService {
 
     public boolean deleteEmployee(int employeeId) {
         return this.employeeRepository.delete(employeeId);
+    }
+
+    public List<Employee> getAllEmployees() {
+        return this.employeeRepository.getAll();
     }
 }

@@ -4,6 +4,8 @@ import com.vijendra.model.Employee;
 import com.vijendra.repository.EmployeeRepository;
 import com.vijendra.service.EmployeeService;
 
+import java.util.List;
+
 //TIP To <b>Run</b> code, press <shortcut actionId="Run"/> or
 // click the <icon src="AllIcons.Actions.Execute"/> icon in the gutter.
 public class Main {
@@ -16,8 +18,18 @@ public class Main {
 /*        createEmployee("Laxman", "laxman@gmail.com", "HR", 20000.00);*/
 /*        createEmployee("Hanuma", "hanumal@gmail.com", "Sales", 50000.50);*/
         /*        getEmployee(1);*/
-        deleteEmployee(5); // delete Hanuman
+/*        deleteEmployee(5); // delete Hanuman*/
+        getAllEmployees();
     }
+    public static void getAllEmployees() {
+        List<Employee> employeeList = employeeService.getAllEmployees();
+        for(Employee employee : employeeList) {
+            System.out.println("-----------------Employee---------------");
+            System.out.println("Employee Id : " + employee.getId());
+            System.out.println("Employee Name : " + employee.getName());
+        }
+    }
+
     public static void deleteEmployee(int id) {
         boolean deleteResult = employeeService.deleteEmployee(id);
         if(deleteResult) {
@@ -27,6 +39,7 @@ public class Main {
 
         System.out.println("Employee with Id " + id + " couldn't be deleted");
     }
+
     public static void createEmployee(String name, String email, String department, double salary) {
         // Create Emp
         Employee employee1 = new Employee(name, email);

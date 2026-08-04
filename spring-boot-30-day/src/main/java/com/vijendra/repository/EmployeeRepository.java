@@ -3,6 +3,8 @@ package com.vijendra.repository;
 import com.vijendra.model.Employee;
 
 import java.sql.*;
+import java.util.ArrayList;
+import java.util.List;
 
 public class EmployeeRepository {
     private final String dbHost;
@@ -51,11 +53,37 @@ public class EmployeeRepository {
                 ) {
             ps.setInt(1, employeeId);
             try(ResultSet res = ps.executeQuery()) {
-                return mapEmployee(res);
+                if(res.next()) {
+                    return mapEmployee(res);
+                }
+
+                return null;
             }
         } catch(SQLException e) {
             System.out.println("Error while getting Emoplyee. Error : " + e.getMessage());
             return null;
+        }
+    }
+
+    public List<Employee> getAll() {
+        String query = "select * from employees";
+
+        List<Employee> list = new ArrayList<>();
+        try(
+                Connection connection = DriverManager.getConnection(this.dbHost, this.dbUser, this.dbPassword);
+                Statement ps = connection.createStatement();
+                ) {
+
+            try(ResultSet res = ps.executeQuery(query)) {
+                while(res.next()) {
+                    list.add(mapEmployee(res));
+                }
+            }
+
+            return list;
+        } catch(SQLException e) {
+            System.out.println("Error while getting Emoplyee. Error : " + e.getMessage());
+            return list;
         }
     }
 
@@ -81,14 +109,11 @@ public class EmployeeRepository {
     }
 
     public Employee mapEmployee(ResultSet rs) throws SQLException {
-        Employee employee = null;
-        if(rs.next()) {
-            employee = new Employee(rs.getString("name"), rs.getString("email"));
-            employee.setSalary(rs.getDouble("salary"));
-            employee.setDepartment(rs.getString("department"));
-            employee.setId(rs.getInt("id"));
-        }
+        Employee employee = new Employee(rs.getString("name"), rs.getString("email"));
 
+        employee.setSalary(rs.getDouble("salary"));
+        employee.setDepartment(rs.getString("department"));
+        employee.setId(rs.getInt("id"));
         return employee;
     }
 }
