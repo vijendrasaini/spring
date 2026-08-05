@@ -102,7 +102,7 @@ public class EmployeeRepository {
         List<Employee> list = new ArrayList<>();
         try(
                 Connection connection = DriverManager.getConnection(this.dbHost, this.dbUser, this.dbPassword);
-                Statement ps = connection.createStatement();
+                PreparedStatement ps = connection.prepareStatement(query);
                 ) {
 
             try(ResultSet res = ps.executeQuery(query)) {
@@ -139,7 +139,7 @@ public class EmployeeRepository {
         }
     }
 
-    public Employee mapEmployee(ResultSet rs) throws SQLException {
+    private Employee mapEmployee(ResultSet rs) throws SQLException {
         Employee employee = new Employee(rs.getString("name"), rs.getString("email"));
 
         employee.setSalary(rs.getBigDecimal("salary"));

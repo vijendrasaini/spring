@@ -17,10 +17,10 @@ public class Main {
 
 /*        createEmployee("Ram", "ram@gmail.com", "IT", 10000.00);*/
 /*        createEmployee("Laxman", "laxman@gmail.com", "HR", 20000.00);*/
-        createEmployee("Bhisma 2", "bhisma2@gmail.com", "HR", new BigDecimal("95000.99"));
-        /*        getEmployee(1);*/
+/*        createEmployee("Bhisma 2", "bhisma2@gmail.com", "HR", new BigDecimal("95000.99"));*/
+/*                getEmployee(1);*/
 /*        deleteEmployee(5); // delete Hanuman*/
-/*        getAllEmployees();*/
+        getAllEmployees();
 /*        updateEmployee(6, "Hanuman Dada");*/
     }
 
