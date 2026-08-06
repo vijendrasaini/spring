@@ -22,7 +22,7 @@ public class JdbcTemplateDemo {
         DataSource dataSource = new HikariDataSource(hikariConfig);
         JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource);
 
-        String query = "select gpa from employees";
+        String query = "select count(*) from employees";
         Integer employeesCount = jdbcTemplate.queryForObject(query, Integer.class);
 
         System.out.println("Total Employees : " + employeesCount);
