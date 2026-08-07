@@ -9,7 +9,7 @@ import java.util.List;
 
 //TIP To <b>Run</b> code, press <shortcut actionId="Run"/> or
 // click the <icon src="AllIcons.Actions.Execute"/> icon in the gutter.
-public class Main {
+public class MainRawJDBC {
 
     static EmployeeDAO employeeDAO = new EmployeeDAO();
     static EmployeeService employeeService = new EmployeeService(employeeDAO);
