@@ -2,6 +2,7 @@ package com.vijendra;
 
 import com.vijendra.model.Employee;
 import com.vijendra.dao.raw_jdbc.EmployeeDAO;
+import com.vijendra.service.EmployeeRawJDBCService;
 import com.vijendra.service.EmployeeService;
 
 import java.math.BigDecimal;
@@ -12,7 +13,7 @@ import java.util.List;
 public class MainRawJDBC {
 
     static EmployeeDAO employeeDAO = new EmployeeDAO();
-    static EmployeeService employeeService = new EmployeeService(employeeDAO);
+    static EmployeeRawJDBCService employeeService = new EmployeeRawJDBCService(employeeDAO);
     static void main() {
 
 /*        createEmployee("Ram", "ram@gmail.com", "IT", 10000.00);*/

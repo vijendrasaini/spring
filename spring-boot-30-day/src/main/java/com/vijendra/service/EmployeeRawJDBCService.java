@@ -1,14 +1,14 @@
 package com.vijendra.service;
 
-import com.vijendra.dao.spring_jdbc.EmployeeDAO;
+import com.vijendra.dao.raw_jdbc.EmployeeDAO;
 import com.vijendra.model.Employee;
 
 import java.util.List;
 
-public class EmployeeService {
+public class EmployeeRawJDBCService {
     private final EmployeeDAO employeeDAO;
 
-    public EmployeeService(EmployeeDAO employeeDAO) {
+    public EmployeeRawJDBCService(EmployeeDAO employeeDAO) {
         this.employeeDAO = employeeDAO;
     }
 
@@ -28,7 +28,7 @@ public class EmployeeService {
         return this.employeeDAO.getAll();
     }
 
-/*    public Employee updateEmployeeName(int id, String name) {
+    public Employee updateEmployeeName(int id, String name) {
         return this.employeeDAO.updateByName(id, name);
-    }*/
+    }
 }
