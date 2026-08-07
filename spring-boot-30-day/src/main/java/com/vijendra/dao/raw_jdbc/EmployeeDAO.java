@@ -6,13 +6,13 @@ import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
-public class EmployeeRepository {
+public class EmployeeDAO {
     private final String dbHost;
     private final String dbUser;
     private final String dbPassword;
     private final String dbName;
 
-    public EmployeeRepository() {
+    public EmployeeDAO() {
         this.dbName = "spring_boot_30_day";
         this.dbHost = "jdbc:mysql://localhost:3306/" + this.dbName;
         this.dbUser = "root";

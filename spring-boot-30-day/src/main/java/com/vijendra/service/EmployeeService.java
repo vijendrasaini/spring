@@ -1,34 +1,34 @@
 package com.vijendra.service;
 
-import com.vijendra.dao.raw_jdbc.EmployeeRepository;
+import com.vijendra.dao.raw_jdbc.EmployeeDAO;
 import com.vijendra.model.Employee;
 
 import java.util.List;
 
 public class EmployeeService {
-    private final EmployeeRepository employeeRepository;
+    private final EmployeeDAO employeeDAO;
 
-    public EmployeeService(EmployeeRepository employeeRepository) {
-        this.employeeRepository = employeeRepository;
+    public EmployeeService(EmployeeDAO employeeDAO) {
+        this.employeeDAO = employeeDAO;
     }
 
     public Employee create(Employee employee) {
-        return this.employeeRepository.create(employee);
+        return this.employeeDAO.create(employee);
     }
 
     public Employee getEmployee(int employeeId) {
-        return this.employeeRepository.get(employeeId);
+        return this.employeeDAO.get(employeeId);
     }
 
     public boolean deleteEmployee(int employeeId) {
-        return this.employeeRepository.delete(employeeId);
+        return this.employeeDAO.delete(employeeId);
     }
 
     public List<Employee> getAllEmployees() {
-        return this.employeeRepository.getAll();
+        return this.employeeDAO.getAll();
     }
 
     public Employee updateEmployeeName(int id, String name) {
-        return this.employeeRepository.updateByName(id, name);
+        return this.employeeDAO.updateByName(id, name);
     }
 }

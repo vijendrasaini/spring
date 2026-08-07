@@ -1,7 +1,7 @@
 package com.vijendra;
 
 import com.vijendra.model.Employee;
-import com.vijendra.dao.raw_jdbc.EmployeeRepository;
+import com.vijendra.dao.raw_jdbc.EmployeeDAO;
 import com.vijendra.service.EmployeeService;
 
 import java.math.BigDecimal;
@@ -11,8 +11,8 @@ import java.util.List;
 // click the <icon src="AllIcons.Actions.Execute"/> icon in the gutter.
 public class Main {
 
-    static EmployeeRepository employeeRepository = new EmployeeRepository();
-    static EmployeeService employeeService = new EmployeeService(employeeRepository);
+    static EmployeeDAO employeeDAO = new EmployeeDAO();
+    static EmployeeService employeeService = new EmployeeService(employeeDAO);
     static void main() {
 
 /*        createEmployee("Ram", "ram@gmail.com", "IT", 10000.00);*/
