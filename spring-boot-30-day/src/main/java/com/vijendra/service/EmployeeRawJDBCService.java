@@ -3,6 +3,8 @@ package com.vijendra.service;
 import com.vijendra.dao.raw_jdbc.EmployeeDAO;
 import com.vijendra.model.Employee;
 
+import java.math.BigDecimal;
+import java.sql.SQLException;
 import java.util.List;
 
 public class EmployeeRawJDBCService {
@@ -30,5 +32,9 @@ public class EmployeeRawJDBCService {
 
     public Employee updateEmployeeName(int id, String name) {
         return this.employeeDAO.updateByName(id, name);
+    }
+
+    public boolean insertAndUpdate(Employee employee, BigDecimal salary) throws SQLException {
+        return this.employeeDAO.insertAndUpdate(employee, salary);
     }
 }

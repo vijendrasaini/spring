@@ -2,6 +2,7 @@ package com.vijendra.dao.raw_jdbc;
 
 import com.vijendra.model.Employee;
 
+import java.math.BigDecimal;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
@@ -146,5 +147,56 @@ public class EmployeeDAO {
         employee.setDepartment(rs.getString("department"));
         employee.setId(rs.getInt("id"));
         return employee;
+    }
+
+    public boolean insertAndUpdate(Employee employee, BigDecimal salary) throws SQLException {
+        Connection connection = DriverManager.getConnection(this.dbHost, this.dbUser, this.dbPassword);
+        try {
+            connection.setAutoCommit(false);
+            String insertQuery = """
+                    INSERT INTO employees(name, email, salary, department)
+                    VALUES (?, ?, ?, ?)
+                """;
+
+            String updateQuery = """
+                    update employees set salary2 = ? where id = ?
+                    """;
+
+            try(
+                    PreparedStatement ps = connection.prepareStatement(insertQuery, Statement.RETURN_GENERATED_KEYS);
+                    PreparedStatement ps2 = connection.prepareStatement(updateQuery);
+                    ) {
+                ps.setString(1, employee.getName());
+                ps.setString(2, employee.getEmail());
+                ps.setBigDecimal(3, employee.getSalary());
+                ps.setString(4, employee.getDepartment());
+
+                int rowsAffected = ps.executeUpdate();
+                if(rowsAffected == 1) {
+                    try(
+                            ResultSet rs = ps.getGeneratedKeys();
+                            ) {
+                        if(rs.next()) {
+                            int employeeId = rs.getInt(1);
+                            System.out.println("NEW Employee ID : " + employeeId);
+
+                            ps2.setBigDecimal(1, salary);
+                            ps2.setInt(2, employeeId);
+
+                            int updateCount = ps2.executeUpdate();
+                        }
+                    }
+                }
+            }
+
+            connection.commit();
+            return true;
+        } catch (Exception e) {
+            System.out.println("Something went wrong. Error message : " + e.getMessage());
+            connection.rollback();
+            return false;
+        } finally {
+            connection.close();
+        }
     }
 }

@@ -6,6 +6,7 @@ import com.vijendra.service.EmployeeRawJDBCService;
 import com.vijendra.service.EmployeeService;
 
 import java.math.BigDecimal;
+import java.sql.SQLException;
 import java.util.List;
 
 //TIP To <b>Run</b> code, press <shortcut actionId="Run"/> or
@@ -21,8 +22,9 @@ public class MainRawJDBC {
 /*        createEmployee("Bhisma 2", "bhisma2@gmail.com", "HR", new BigDecimal("95000.99"));*/
 /*                getEmployee(1);*/
 /*        deleteEmployee(5); // delete Hanuman*/
-        getAllEmployees();
+/*        getAllEmployees();*/
 /*        updateEmployee(6, "Hanuman Dada");*/
+        insertAndUpdate();
     }
 
     public static void updateEmployee(int id, String name) {
@@ -81,5 +83,20 @@ public class MainRawJDBC {
         }
 
         System.out.println("No employee found with the give id : " + id);
+    }
+
+    public static void insertAndUpdate() {
+        try{
+            Employee employee = new Employee("Test2", "test2@gmail.com");
+            employee.setDepartment("Test");
+            boolean isCreated = employeeService.insertAndUpdate(employee, new BigDecimal("88999.89"));
+            if(isCreated) {
+                System.out.println("Employee created successfully with salary updated");
+                return;
+            }
+        } catch (SQLException e) {
+            System.out.println("Something is wrong. Error Message : " + e.getMessage());
+        }
+
     }
 }

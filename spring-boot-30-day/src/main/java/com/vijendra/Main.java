@@ -2,28 +2,30 @@ package com.vijendra;
 
 import com.vijendra.config.SpringJDBC;
 import com.vijendra.dao.spring_jdbc.EmployeeDAO;
+import com.vijendra.dto.SpringJdbcData;
 import com.vijendra.model.Employee;
 import com.vijendra.service.EmployeeService;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.math.BigDecimal;
+import java.sql.SQLException;
 import java.util.List;
 
 public class Main {
     static EmployeeService employeeService;
     static void main() {
         SpringJDBC springJDBC = new SpringJDBC();
-        JdbcTemplate jdbcTemplate = springJDBC.getJdbcTemplate();
+        SpringJdbcData springJdbcData = springJDBC.getJdbcTemplate();
 
-        EmployeeDAO employeeDAO = new EmployeeDAO(jdbcTemplate);
+        EmployeeDAO employeeDAO = new EmployeeDAO(springJdbcData);
         employeeService = new EmployeeService(employeeDAO);
 
 /*        showAllEmployees(getAllEmployees());*/
 /*        createEmployee();*/
 /*        getEmployee(16);*/
 /*        update(18);*/
-        delete(18);
-
+/*        delete(18);*/
+          insertAndUpdate();
     }
     public static List<Employee> getAllEmployees() {
         return employeeService.getAllEmployees();
@@ -72,5 +74,20 @@ public class Main {
         } else {
             System.out.println("Employee with id : " + id +" doesn't exist");
         }
+    }
+
+    public static void insertAndUpdate() {
+        try{
+            Employee employee = new Employee("Platform", "platform@gmail.com");
+            employee.setDepartment("Test");
+            boolean isCreated = employeeService.insertAndUpdate(employee, new BigDecimal("88999.89"));
+            if(isCreated) {
+                System.out.println("Employee created successfully with salary updated");
+                return;
+            }
+        } catch (SQLException e) {
+            System.out.println("Something is wrong. Error Message : " + e.getMessage());
+        }
+
     }
 }

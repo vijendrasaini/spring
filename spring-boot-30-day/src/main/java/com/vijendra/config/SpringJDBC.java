@@ -1,14 +1,17 @@
 package com.vijendra.config;
 
+import com.vijendra.dto.SpringJdbcData;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.transaction.TransactionManager;
 
 import javax.sql.DataSource;
 
 public class SpringJDBC {
-    public JdbcTemplate getJdbcTemplate() {
+    public SpringJdbcData getJdbcTemplate() {
         HikariConfig hikariConfig = new HikariConfig();
 
         hikariConfig.setJdbcUrl("jdbc:mysql://localhost:3306/spring_boot_30_day");
@@ -18,6 +21,11 @@ public class SpringJDBC {
 /*        hikariConfig.setConnectionTimeout(2000);*/
 
         HikariDataSource dataSource = new HikariDataSource(hikariConfig);
-        return new JdbcTemplate(dataSource);
+        DataSourceTransactionManager transactionManager = new DataSourceTransactionManager(dataSource);
+
+        SpringJdbcData springJdbcData = new SpringJdbcData();
+        springJdbcData.jdbcTemplate = new JdbcTemplate(dataSource);
+        springJdbcData.transactionManager =transactionManager;
+        return springJdbcData;
     }
 }
