@@ -1,7 +1,7 @@
 package com.vijendra;
 
 import com.vijendra.model.Employee;
-import com.vijendra.repository.EmployeeRepository;
+import com.vijendra.dao.EmployeeRepository;
 import com.vijendra.service.EmployeeService;
 
 import java.math.BigDecimal;

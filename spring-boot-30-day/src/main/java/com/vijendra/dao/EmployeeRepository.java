@@ -1,4 +1,4 @@
-package com.vijendra.repository;
+package com.vijendra.dao;
 
 import com.vijendra.model.Employee;
 
