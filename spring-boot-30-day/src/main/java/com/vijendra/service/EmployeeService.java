@@ -12,7 +12,7 @@ public class EmployeeService {
         this.employeeDAO = employeeDAO;
     }
 
-    public Employee create(Employee employee) {
+    public int create(Employee employee) {
         return this.employeeDAO.create(employee);
     }
 
@@ -28,7 +28,7 @@ public class EmployeeService {
         return this.employeeDAO.getAll();
     }
 
-/*    public Employee updateEmployeeName(int id, String name) {
+    public boolean updateEmployeeName(int id, String name) {
         return this.employeeDAO.updateByName(id, name);
-    }*/
+    }
 }

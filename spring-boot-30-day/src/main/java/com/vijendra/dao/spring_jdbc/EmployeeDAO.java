@@ -21,7 +21,7 @@ public class EmployeeDAO {
         return this.jdbcTemplate.query(query, this.getRowMapper());
     }
 
-    public Employee create(Employee employee) {
+    public int create(Employee employee) {
         String query = "insert into employees(name, email, salary, department) values( ?, ?, ?, ?)";
 
         KeyHolder keyHolder = new GeneratedKeyHolder();
@@ -43,8 +43,7 @@ public class EmployeeDAO {
             throw new RuntimeException("ID can't be retrieved");
         }
 
-        int id = (int) insertedEmployeeId;
-        return get(id);
+        return insertedEmployeeId.intValue();
     }
 
     public RowMapper<Employee> getRowMapper() {
@@ -53,6 +52,7 @@ public class EmployeeDAO {
             String name = resultSet.getString("name");
             String email = resultSet.getString("email");
             Employee employee = new Employee(name, email);
+            employee.setId(resultSet.getInt("id"));
             employee.setSalary(resultSet.getBigDecimal("salary"));
             employee.setDepartment(resultSet.getString("department"));
 
@@ -61,7 +61,17 @@ public class EmployeeDAO {
     }
 
     public Employee get(int id) {
-        String query = "Select * from employee where id = ?";
-        return jdbcTemplate.query(query, getRowMapper()).getFirst();
+        String query = "select * from employees where id = ?";
+        return jdbcTemplate.query(query, getRowMapper(), id).getFirst();
+    }
+
+    public boolean updateByName(int id, String name) {
+        String query = "update employees set name = ? where id = ?";
+        return jdbcTemplate.update(query, name, id) == 1;
+    }
+
+    public boolean delete(int id) {
+        String query = "delete from employees where id = ?";
+        return jdbcTemplate.update(query, id) == 1;
     }
 }
