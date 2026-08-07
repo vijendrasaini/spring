@@ -1,4 +1,4 @@
-package com.vijendra.dao;
+package com.vijendra.dao.raw_jdbc;
 
 import com.vijendra.model.Employee;
 

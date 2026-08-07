@@ -1,6 +1,6 @@
 package com.vijendra.service;
 
-import com.vijendra.dao.EmployeeRepository;
+import com.vijendra.dao.raw_jdbc.EmployeeRepository;
 import com.vijendra.model.Employee;
 
 import java.util.List;
