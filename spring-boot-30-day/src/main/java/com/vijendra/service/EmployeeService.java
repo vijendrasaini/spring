@@ -2,6 +2,7 @@ package com.vijendra.service;
 
 import com.vijendra.dao.spring_jdbc.EmployeeDAO;
 import com.vijendra.model.Employee;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.sql.SQLException;
@@ -34,6 +35,11 @@ public class EmployeeService {
         return this.employeeDAO.updateByName(id, name);
     }
 
+    public boolean insertAndUpdateWithTransactionManager(Employee employee, BigDecimal salary) throws SQLException {
+        return this.employeeDAO.insertAndUpdateWithTransactionManager(employee, salary);
+    }
+
+    @Transactional
     public boolean insertAndUpdate(Employee employee, BigDecimal salary) throws SQLException {
         return this.employeeDAO.insertAndUpdate(employee, salary);
     }
