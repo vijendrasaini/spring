@@ -87,7 +87,7 @@ public class EmployeeDAO {
         return jdbcTemplate.update(query, id) == 1;
     }
 
-    public boolean insertAndUpdate(Employee employee, BigDecimal salary) {
+    public boolean insertAndUpdateWithTransactionManager(Employee employee, BigDecimal salary) {
         TransactionDefinition transactionDefinition = new DefaultTransactionDefinition();
         TransactionStatus transactionStatus = this.transactionManager.getTransaction(transactionDefinition);
         try {
@@ -127,5 +127,38 @@ public class EmployeeDAO {
             transactionManager.rollback(transactionStatus);
             return false;
         }
+    }
+
+    public boolean insertAndUpdate(Employee employee, BigDecimal salary) {
+        String insertQuery = """
+                INSERT INTO employees(name, email, salary, department)
+                VALUES (?, ?, ?, ?)
+            """;
+
+        KeyHolder keyHolder = new GeneratedKeyHolder();
+        String updateQuery = """
+                update employees set salary2 = ? where id = ?
+                """;
+        jdbcTemplate.update(
+                connection -> {
+                    PreparedStatement ps = connection.prepareStatement(insertQuery, Statement.RETURN_GENERATED_KEYS);
+
+                    ps.setString(1, employee.getName());
+                    ps.setString(2, employee.getEmail());
+                    ps.setBigDecimal(3, new BigDecimal("0.00"));
+                    ps.setString(4, employee.getDepartment());
+
+                    return ps;
+                },
+                keyHolder
+        );
+
+        Number idNumber = keyHolder.getKey();
+        int newEmployeeId = idNumber.intValue();
+
+        System.out.println("NEW Employee ID : " + newEmployeeId);
+        System.out.println("Updating the Salary for employee....");
+        jdbcTemplate.update(updateQuery, salary, newEmployeeId);
+        return true;
     }
 }
