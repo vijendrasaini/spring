@@ -78,9 +78,9 @@ public class Main {
 
     public static void insertAndUpdate() {
         try{
-            Employee employee = new Employee("Platform", "platform@gmail.com");
+            Employee employee = new Employee("Platform2", "platform2@gmail.com");
             employee.setDepartment("Test");
-            boolean isCreated = employeeService.insertAndUpdate(employee, new BigDecimal("88999.89"));
+            boolean isCreated = employeeService.insertAndUpdate(employee, new BigDecimal("22.89"));
             if(isCreated) {
                 System.out.println("Employee created successfully with salary updated");
                 return;
