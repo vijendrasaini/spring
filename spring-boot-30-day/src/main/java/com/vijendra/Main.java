@@ -22,10 +22,10 @@ public class Main {
 
 /*        showAllEmployees(getAllEmployees());*/
 /*        createEmployee();*/
-/*        getEmployee(16);*/
-/*        update(18);*/
+/*        getEmployee(1);*/
+        update(28);
 /*        delete(18);*/
-          insertAndUpdate();
+/*        insertAndUpdate();*/
     }
     public static List<Employee> getAllEmployees() {
         return employeeService.getAllEmployees();
@@ -77,17 +77,14 @@ public class Main {
     }
 
     public static void insertAndUpdate() {
-        try{
-            Employee employee = new Employee("Platform2", "platform2@gmail.com");
-            employee.setDepartment("Test");
-            boolean isCreated = employeeService.insertAndUpdate(employee, new BigDecimal("22.89"));
-            if(isCreated) {
-                System.out.println("Employee created successfully with salary updated");
-                return;
-            }
-        } catch (SQLException e) {
-            System.out.println("Something is wrong. Error Message : " + e.getMessage());
+        Employee employee = new Employee("Platform2", "platform2@gmail.com");
+        employee.setDepartment("Test");
+        boolean isCreated = employeeService.insertAndUpdate(employee, new BigDecimal("22.89"));
+        if(isCreated) {
+            System.out.println("Employee created successfully with salary updated");
+            return;
         }
 
+        System.out.println("Something went wrong!");
     }
 }
