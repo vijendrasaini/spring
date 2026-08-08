@@ -6,6 +6,7 @@ import com.zaxxer.hikari.HikariDataSource;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionManager;
 
 import javax.sql.DataSource;
@@ -21,7 +22,7 @@ public class SpringJDBC {
 /*        hikariConfig.setConnectionTimeout(2000);*/
 
         HikariDataSource dataSource = new HikariDataSource(hikariConfig);
-        DataSourceTransactionManager transactionManager = new DataSourceTransactionManager(dataSource);
+        PlatformTransactionManager transactionManager = new DataSourceTransactionManager(dataSource);
 
         SpringJdbcData springJdbcData = new SpringJdbcData();
         springJdbcData.jdbcTemplate = new JdbcTemplate(dataSource);
