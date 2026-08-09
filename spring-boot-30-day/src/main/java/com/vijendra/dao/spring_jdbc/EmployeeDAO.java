@@ -23,9 +23,9 @@ public class EmployeeDAO {
     private final JdbcTemplate jdbcTemplate;
     private final PlatformTransactionManager transactionManager;
 
-    public EmployeeDAO(SpringJdbcData springJdbcData) {
-        this.jdbcTemplate = springJdbcData.jdbcTemplate;
-        this.transactionManager = springJdbcData.transactionManager;
+    public EmployeeDAO(JdbcTemplate jdbcTemplate, PlatformTransactionManager transactionManager) {
+        this.jdbcTemplate = jdbcTemplate;
+        this.transactionManager = transactionManager;
     }
 
     public List<Employee> getAll() {

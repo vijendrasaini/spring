@@ -10,6 +10,6 @@ public class Main {
         ApplicationContext applicationContext = new AnnotationConfigApplicationContext(AppConfig.class);
 
         EmployeeService employeeService = applicationContext.getBean(EmployeeService.class);
-        SpringJdbcDemo.getEmployee(1);
+        SpringJdbcDemo.showEmployee(employeeService.getEmployee(1));
     }
 }
