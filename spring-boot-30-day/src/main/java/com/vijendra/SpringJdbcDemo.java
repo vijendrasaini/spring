@@ -5,13 +5,11 @@ import com.vijendra.dao.spring_jdbc.EmployeeDAO;
 import com.vijendra.dto.SpringJdbcData;
 import com.vijendra.model.Employee;
 import com.vijendra.service.EmployeeService;
-import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.math.BigDecimal;
-import java.sql.SQLException;
 import java.util.List;
 
-public class Main {
+public class SpringJdbcDemo {
     static EmployeeService employeeService;
     static void main() {
         SpringJDBC springJDBC = new SpringJDBC();

@@ -2,10 +2,12 @@ package com.vijendra.service;
 
 import com.vijendra.dao.spring_jdbc.EmployeeDAO;
 import com.vijendra.model.Employee;
+import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.util.List;
 
+@Service
 public class EmployeeService {
 
     private final EmployeeDAO employeeDAO;
