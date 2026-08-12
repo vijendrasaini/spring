@@ -1,5 +1,6 @@
 package com.vijendra.service;
 
+import com.vijendra.annotation.LogExecution;
 import com.vijendra.dao.spring_jdbc.EmployeeDAO;
 import com.vijendra.model.Employee;
 import org.springframework.stereotype.Service;
@@ -20,6 +21,7 @@ public class EmployeeService {
         return employeeDAO.create(employee);
     }
 
+    @LogExecution
     public Employee getEmployee(int employeeId) {
         return employeeDAO.get(employeeId);
     }
@@ -51,5 +53,15 @@ public class EmployeeService {
             BigDecimal salary
     ) {
         return employeeDAO.insertAndUpdate(employee, salary);
+    }
+
+    public void methodA() {
+        System.out.println("Inside methodA");
+
+        methodB();
+    }
+
+    public void methodB() {
+        System.out.println("Inside methodB");
     }
 }

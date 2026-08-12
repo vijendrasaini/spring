@@ -19,7 +19,17 @@ public class LoggingAspect {
         System.out.println(">>>>>>>>>>>>>>>>>>> Before EmployeeService Method >>>>>>>>>>>>>>>>>>>");
     }
 
-    @After("execution(* com.vijendra.service.*.*(..))")
+    @Before("execution(* com.vijendra.service.*.*(..)")
+    public void logBeforePayment(JoinPoint joinPoint) {
+        System.out.println("Method Intercept -> Designator : Before");
+    }*/
+
+/*    @Before("@annotation(com.vijendra.annotation.LogExecution)")
+    public void logAnnotatedMethod(JoinPoint joinPoint) {
+        System.out.println("Intercepted : " + joinPoint.getSignature().getName());
+    }*/
+
+/*    @After("execution(* com.vijendra.service.*.*(..))")
     public void logAfterFinally(JoinPoint joinPoint) {
         System.out.println(">>>>>>>>>>>>>>>>>>> After ( finally ) >>>>>>>>>>>>>>>>>>>");
         System.out.println(joinPoint.getSignature().getName());
@@ -38,7 +48,7 @@ public class LoggingAspect {
         System.out.println(">>>>>>>>>>>>>>>>>>> After ( AfterReturning ) >>>>>>>>>>>>>>>>>>>");
         System.out.println(joinPoint.getSignature().getName());
         System.out.println(">>>>>>>>>>>>>>>>>>> After ( AfterReturning ) >>>>>>>>>>>>>>>>>>>");
-    }*/
+    }
 
     @Around("execution(* com.vijendra.service.*.*(..))")
     public Object logAround(ProceedingJoinPoint joinPoint) throws Throwable {
@@ -50,5 +60,5 @@ public class LoggingAspect {
         System.out.println("After");
 
         return result;
-    }
+    }*/
 }
