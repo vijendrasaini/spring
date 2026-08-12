@@ -71,6 +71,8 @@ public class EmployeeDAO {
     public Employee get(int id) {
         String query = "SELECT * FROM employees WHERE id = ?";
 
+/*        if(id == 1)
+            throw new RuntimeException("Throwing Exception........................");*/
         return jdbcTemplate.queryForObject(
                 query,
                 getRowMapper(),
