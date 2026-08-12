@@ -12,12 +12,12 @@ import java.util.Arrays;
 @Aspect
 public class LoggingAspect {
 
-/*    @Before("execution(* com.vijendra.service.*.*(..))")
+    @Before("execution(* com.vijendra.service.*.*(..))")
     public void logBefore(JoinPoint joinPoint) {
         System.out.println(">>>>>>>>>>>>>>>>>>> Before EmployeeService Method >>>>>>>>>>>>>>>>>>>");
         System.out.println(joinPoint.getSignature().getName());
         System.out.println(">>>>>>>>>>>>>>>>>>> Before EmployeeService Method >>>>>>>>>>>>>>>>>>>");
-    }*/
+    }
 
     @After("execution(* com.vijendra.service.*.*(..))")
     public void logAfterFinally(JoinPoint joinPoint) {
