@@ -12,7 +12,7 @@ import java.util.Arrays;
 @Aspect
 public class LoggingAspect {
 
-    @Before("execution(* com.vijendra.service.*.*(..))")
+/*    @Before("execution(* com.vijendra.service.*.*(..))")
     public void logBefore(JoinPoint joinPoint) {
         System.out.println(">>>>>>>>>>>>>>>>>>> Before EmployeeService Method >>>>>>>>>>>>>>>>>>>");
         System.out.println(joinPoint.getSignature().getName());
@@ -38,14 +38,17 @@ public class LoggingAspect {
         System.out.println(">>>>>>>>>>>>>>>>>>> After ( AfterReturning ) >>>>>>>>>>>>>>>>>>>");
         System.out.println(joinPoint.getSignature().getName());
         System.out.println(">>>>>>>>>>>>>>>>>>> After ( AfterReturning ) >>>>>>>>>>>>>>>>>>>");
-    }
+    }*/
 
     @Around("execution(* com.vijendra.service.*.*(..))")
-    public Employee logAfterOnlyOnSuccess(ProceedingJoinPoint joinPoint) throws Throwable {
-        System.out.println(">>>>>>>>>>>>>>>>>>> ( Around ) >>>>>>>>>>>>>>>>>>>");
+    public Object logAround(ProceedingJoinPoint joinPoint) throws Throwable {
+
+        System.out.println("Before");
+
         Object result = joinPoint.proceed();
-        System.out.println(result);
-        System.out.println(">>>>>>>>>>>>>>>>>>> ( Around ) >>>>>>>>>>>>>>>>>>>");
-        return (Employee) result;
+
+        System.out.println("After");
+
+        return result;
     }
 }
