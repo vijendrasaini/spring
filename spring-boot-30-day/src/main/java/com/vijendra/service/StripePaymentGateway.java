@@ -11,7 +11,7 @@ import java.time.LocalTime;
 public class StripePaymentGateway implements PaymentGateway{
 
     @Override
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional(propagation = Propagation.NEVER)
     public void pay(EmployeeDAO employeeDAO) {
 /*        System.out.println("Making the payment...");*/
         System.out.println("Updated name for User 4...");
