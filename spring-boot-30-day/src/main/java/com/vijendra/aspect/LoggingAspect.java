@@ -11,7 +11,15 @@ import java.util.Arrays;
 @Component
 @Aspect
 public class LoggingAspect {
+/*    @Before("within(com.vijendra.service..*)")
+    public void beforeAdvice(JoinPoint joinPoint) {
+        System.out.println("Intercepted : " + joinPoint.getSignature().getName());
+    }*/
 
+/*    @Before("bean(stripePaymentGateway)")
+    public void beforeAdvice(JoinPoint joinPoint) {
+        System.out.println("Intercepted : " + joinPoint.getSignature().getName());
+    }*/
 /*    @Before("execution(* com.vijendra.service.*.*(..))")
     public void logBefore(JoinPoint joinPoint) {
         System.out.println(">>>>>>>>>>>>>>>>>>> Before EmployeeService Method >>>>>>>>>>>>>>>>>>>");

@@ -4,6 +4,7 @@ import com.vijendra.annotation.LogExecution;
 import com.vijendra.dao.spring_jdbc.EmployeeDAO;
 import com.vijendra.model.Employee;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -21,7 +22,6 @@ public class EmployeeService {
         return employeeDAO.create(employee);
     }
 
-    @LogExecution
     public Employee getEmployee(int employeeId) {
         return employeeDAO.get(employeeId);
     }
@@ -55,13 +55,19 @@ public class EmployeeService {
         return employeeDAO.insertAndUpdate(employee, salary);
     }
 
-    public void methodA() {
-        System.out.println("Inside methodA");
-
-        methodB();
-    }
-
-    public void methodB() {
-        System.out.println("Inside methodB");
+    @Transactional
+    public void testTransaction() throws Exception {
+        System.out.println("Inside service");
+        int employeeId1 = 1, employeeId2 = 2;
+        System.out.println("Updating Employee with Id : " + employeeId1);
+        employeeDAO.updateByName(1, "RAM 6");
+        System.out.println("Updating Employee with Id : " + employeeId2);
+        employeeDAO.updateByName(4, "Laxman 6");
+        throw new Exception("Something went wrong");
+/*        try{
+            throw new RuntimeException("Something row happened");
+        } catch (RuntimeException e) {
+            System.out.println("Error while updating employees. Message : " + e.getMessage());
+        }*/
     }
 }
