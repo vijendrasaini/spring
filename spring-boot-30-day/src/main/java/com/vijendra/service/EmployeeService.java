@@ -71,13 +71,13 @@ public class EmployeeService {
         throw new Exception("Something went wrong");
     }
 
-    // @Transactional
+    @Transactional
     public void updateName() {
         System.out.println("Updating name for User 1...");
         employeeDAO.updateByName(1, "Time1 " + LocalTime.now());
 
         paymentGateway.pay(this.employeeDAO);
 
-        throw new RuntimeException("BAD happened in A");
+        //throw new RuntimeException("BAD happened in A");
     }
 }
