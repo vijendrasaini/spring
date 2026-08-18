@@ -12,7 +12,7 @@ public class SpringBoot30DayApplication {
     public static void main(String[] args) throws Exception {
         ApplicationContext context = SpringApplication.run(SpringBoot30DayApplication.class, args);
         EmployeeService employeeService = context.getBean(EmployeeService.class);
-        System.out.println(employeeService.getClass().getName());
-        employeeService.testTransaction();
+
+        employeeService.updateName();
     }
 }

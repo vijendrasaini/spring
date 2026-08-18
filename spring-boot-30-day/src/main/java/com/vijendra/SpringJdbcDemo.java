@@ -16,12 +16,13 @@ public class SpringJdbcDemo {
         SpringJdbcData springJdbcData = springJDBC.getJdbcTemplate();
 
         EmployeeDAO employeeDAO = new EmployeeDAO(springJdbcData.jdbcTemplate, springJdbcData.transactionManager);
-        employeeService = new EmployeeService(employeeDAO);
+/*        employeeService = new EmployeeService(employeeDAO);*/
+
 
 /*        showAllEmployees(getAllEmployees());*/
 /*        createEmployee();*/
 /*        getEmployee(1);*/
-        update(28);
+/*        update(28);*/
 /*        delete(18);*/
 /*        insertAndUpdate();*/
     }

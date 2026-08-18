@@ -4,18 +4,23 @@ import com.vijendra.annotation.LogExecution;
 import com.vijendra.dao.spring_jdbc.EmployeeDAO;
 import com.vijendra.model.Employee;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalTime;
+import java.util.Date;
 import java.util.List;
 
 @Service
 public class EmployeeService {
 
     private final EmployeeDAO employeeDAO;
+    private final PaymentGateway paymentGateway;
 
-    public EmployeeService(EmployeeDAO employeeDAO) {
+    public EmployeeService(EmployeeDAO employeeDAO, PaymentGateway paymentGateway) {
         this.employeeDAO = employeeDAO;
+        this.paymentGateway = paymentGateway;
     }
 
     public int create(Employee employee) {
@@ -64,10 +69,15 @@ public class EmployeeService {
         System.out.println("Updating Employee with Id : " + employeeId2);
         employeeDAO.updateByName(4, "Laxman 6");
         throw new Exception("Something went wrong");
-/*        try{
-            throw new RuntimeException("Something row happened");
-        } catch (RuntimeException e) {
-            System.out.println("Error while updating employees. Message : " + e.getMessage());
-        }*/
+    }
+
+    @Transactional
+    public void updateName() {
+        System.out.println("Updating name for User 1...");
+        employeeDAO.updateByName(1, "Time1 " + LocalTime.now());
+
+        paymentGateway.pay(this.employeeDAO);
+
+        throw new RuntimeException("BAD happened in A");
     }
 }
