@@ -1,4 +1,4 @@
-# Spring Boot 30-Day Practical — Complete Context Through Day 9
+# Spring Boot Knowledge Context
 
 I am **Vijendra**. This is my hands-on Spring Boot 30-Day Practical Project.
 
@@ -22,6 +22,12 @@ Goal:
 
 > **Interview-ready understanding + practical experience + concise God-Level notes.**
 
+Before starting the next day:
+
+> Write **God-Level notes** in the notebook. To the point. Precise. Noise-free. No repetition. Only what matters.
+
+Do not jump to the next day until those notes exist.
+
 I want to **write the code myself**.
 
 Do not give complete implementations unless I explicitly ask or I'm stuck.
@@ -38,6 +44,15 @@ Jira workflow:
 ```text
 To Do → In Progress → In Review → Done
 ```
+
+How a day starts:
+
+1. I get a **Jira title + Jira description** for that day.
+2. I create the Jira ticket.
+3. I say **Done / created**.
+4. Only then we start the day, topic by topic.
+
+Do not start teaching a new day before the Jira ticket exists.
 
 ---
 
@@ -502,7 +517,7 @@ Day 8 = **DONE**
 
 ---
 
-# Day 9 — Spring Transaction Management 🚧 IN PROGRESS
+# Day 9 — Spring Transaction Management ✅
 
 ## Day 9 Objective
 
@@ -975,7 +990,141 @@ Current understanding:
 
 ---
 
-# CURRENT POSITION — DAY 9 NOT DONE
+# Day 9 Experiment 8 — REQUIRED ✅
+
+Practically verified with:
+
+```text
+EmployeeService.updateName()     @Transactional (REQUIRED)
+        ↓
+StripePaymentGateway.pay()       @Transactional (REQUIRED)
+```
+
+B's interceptor still runs. It does **not** skip interception. It sees an existing transaction and **joins** it.
+
+If A throws `RuntimeException` after B returns:
+
+```text
+ONE physical transaction
+↓
+A UPDATE + B UPDATE
+↓
+A exception
+↓
+ROLLBACK both
+```
+
+Employees 1 and 4 both remain unchanged.
+
+---
+
+# Day 9 Experiment 9 — REQUIRES_NEW ✅
+
+If B uses `Propagation.REQUIRES_NEW`:
+
+```text
+Transaction A starts
+↓
+A suspended
+↓
+Transaction B starts
+↓
+B UPDATE
+↓
+B COMMITS (independent, durable)
+↓
+A resumes
+↓
+A throws RuntimeException
+↓
+only Transaction A rolls back
+```
+
+Employee 4 (B) remains updated. Employee 1 (A) is rolled back.
+
+Important:
+
+> `REQUIRES_NEW` is independent because A is suspended, B commits before control returns to A, then A resumes.
+
+---
+
+# Day 9 — MANDATORY ✅
+
+Practiced:
+
+```java
+@Transactional(propagation = Propagation.MANDATORY)
+```
+
+If an outer transaction exists → join it, then `pay()` executes.
+
+If no outer transaction exists:
+
+```text
+Caller
+↓
+B proxy
+↓
+TransactionInterceptor
+↓
+IllegalTransactionStateException
+↓
+target.pay() NEVER runs
+```
+
+The interceptor throws **before** the target method. Not a single line of `pay()` executes.
+
+> `MANDATORY` = a transaction must already exist. Join it. Do not create one.
+
+Other propagation types were also practiced during this day.
+
+---
+
+# Day 9 Experiment 10 — Self Invocation ✅
+
+Connected to Day 8.
+
+If a non-transactional method calls `this.testTransaction()`:
+
+```text
+methodA()
+↓
+this.testTransaction()
+↓
+Target directly
+↓
+Proxy bypassed
+↓
+TransactionInterceptor never runs
+↓
+NO transaction
+```
+
+`@Transactional` on the inner method does nothing for that call.
+
+---
+
+# Day 9 Experiment 11 — Cross-Service Proxy ✅
+
+Verified with injected `PaymentGateway`:
+
+```text
+EmployeeService proxy
+        ↓
+paymentGateway.pay(...)
+        ↓
+StripePaymentGateway proxy
+        ↓
+TransactionInterceptor
+        ↓
+target.pay()
+```
+
+Transactional metadata on B works because the call crosses a **Spring bean proxy boundary**, not `this`.
+
+---
+
+# CURRENT POSITION — DAY 9 DONE ✅
 
 Completed:
 
@@ -989,146 +1138,17 @@ Completed:
 - `rollbackFor` → checked exception rollback ✅
 - Transaction boundary understanding ✅
 - Service-layer boundary understanding ✅
-- REQUIRED conceptual understanding ✅
+- REQUIRED ✅
+- REQUIRES_NEW ✅
+- MANDATORY ✅
+- Other propagation types practiced ✅
+- Self invocation ✅
+- Cross-service proxy ✅
 
-Current next step:
-
-> **Practically implement and verify REQUIRED.**
-
----
-
-# Remaining Day 9 Roadmap
-
-## Experiment 8 — REQUIRED 🚧 NEXT
-
-Create:
-
-```text
-EmployeeService
-    ↓
-AnotherService
-```
-
-Both methods have `@Transactional`.
-
-First run without exceptions and inspect transaction logs.
-
-Then introduce an exception and observe that both participate in the **same transaction**.
-
-Expected:
-
-```text
-Service A
-@Transactional
-↓
-Transaction A
-↓
-Service B
-@Transactional(REQUIRED)
-↓
-Join Transaction A
-↓
-ONE physical transaction
-```
-
-Then test failure behavior.
+Day 9 = **DONE**
 
 ---
 
-## Experiment 9 — REQUIRES_NEW
-
-Verify:
-
-```text
-Service A
-@Transactional
-↓
-Service B
-@Transactional(REQUIRES_NEW)
-```
-
-Expected:
-
-```text
-Transaction A
-↓
-A suspended
-↓
-Transaction B starts
-↓
-B commits/rolls back independently
-↓
-A resumes
-↓
-A continues
-```
-
-Must be experimentally verified, not just memorized.
-
----
-
-## Experiment 10 — Self Invocation
-
-Test:
-
-```java
-public void methodA() {
-    this.methodB();
-}
-
-@Transactional
-public void methodB() {
-    ...
-}
-```
-
-Expected:
-
-```text
-External call
-↓
-Proxy
-↓
-methodB()
-↓
-@Transactional works
-```
-
-But:
-
-```text
-methodA()
-↓
-this.methodB()
-↓
-Target directly
-↓
-Proxy bypassed
-↓
-@Transactional interception bypassed
-```
-
-Must explicitly connect to Day 8 self-invocation.
-
----
-
-## Experiment 11 — Cross-Service Proxy
-
-Verify:
-
-```text
-EmployeeService
-↓
-AnotherService proxy
-↓
-TransactionInterceptor
-↓
-AnotherService target
-```
-
-This reinforces why transactional behavior works when crossing Spring proxy boundaries.
-
----
 
 # What I Should Be Able to Explain by the End of Day 9
 
@@ -1285,6 +1305,194 @@ Spring Transaction Management
 
 ---
 
+# Day 9 — God-Level Notes (Notebook)
+
+## What `@Transactional` is
+
+`@Transactional` is only a **label** on a method or class. A label is called metadata. It does not open a database transaction by itself.
+
+Spring reads this label. If the class is a Spring bean, Spring may wrap that bean with a **proxy**.
+
+**Proxy** = a wrapper object that looks like the real bean. Callers talk to the wrapper. The wrapper can run extra work before and after the real method.
+
+**Target** = the real object behind the proxy (the actual `EmployeeService` instance).
+
+**TransactionInterceptor** = Spring's extra work on that proxy. It starts a transaction, lets the real method run, then commit or rollback.
+
+```text
+Caller
+↓
+Proxy (wrapper)
+↓
+TransactionInterceptor
+↓
+start or join a transaction
+↓
+Target method (real code)
+↓
+DAO → database
+↓
+commit or rollback
+```
+
+A bean in the Spring container is **not** always a proxy. If there is no `@Transactional` (and no other AOP advice), the caller gets the real class. No wrapper. No transaction from Spring.
+
+---
+
+## Rollback rules
+
+When the method finishes, the interceptor decides commit or rollback.
+
+Default:
+
+- `RuntimeException` or `Error` leaves the method → **rollback**
+- Checked `Exception` (like `throw new Exception(...)`) leaves the method → **commit**
+
+`rollbackFor = Exception.class` changes that rule so a checked exception also causes rollback. It does not create the transaction. It only changes the decision.
+
+**Swallowing an exception** = catch it inside the method and do not rethrow it.
+
+If you swallow it, the interceptor thinks the method completed normally → **commit**.  
+Spring can rollback only if the exception reaches the proxy.
+
+---
+
+## Transaction boundary
+
+A transaction boundary is **where the transaction starts and ends**.
+
+With `@Transactional`, that place is the **proxied service method**, not each SQL statement.
+
+```text
+@Transactional
+placeOrder()
+    save order
+    save items
+    reduce stock
+↓
+ONE transaction around the whole method
+```
+
+Many DAO calls can run inside that one transaction. Either all become permanent, or none do.
+
+Put `@Transactional` on the **service**, because the service is the business operation.
+
+Do not put it on the DAO (one SQL is not the business unit).  
+Do not put it on the controller (HTTP adapter is not the business unit).
+
+---
+
+## Propagation
+
+**Propagation** = what this method should do if a transaction already exists.
+
+### REQUIRED (default)
+
+If a transaction already exists → **join it** (use the same one).  
+If none exists → **create** a new one.
+
+Join does not mean B has no interceptor. B's proxy still runs. B's interceptor sees A's transaction and participates in it.
+
+So two interceptors can still mean **one** real database transaction.
+
+If A updates employee 1, B updates employee 4, then A throws after B returns → both changes rollback.
+
+### REQUIRES_NEW
+
+B does not join A.
+
+```text
+A's transaction is paused (suspended)
+↓
+B starts its own transaction
+↓
+B commits or rollbacks by itself
+↓
+A's transaction continues
+```
+
+If B already committed, and then A fails, B's database changes stay. A's changes rollback.
+
+### MANDATORY
+
+A transaction **must already exist**.
+
+If it exists → join it.  
+If it does not exist → the interceptor throws. The real `pay()` method does not run at all. Not even the first line.
+
+---
+
+## Self-invocation
+
+**Self-invocation** = an object calling **its own** method using `this`.
+
+Example:
+
+```java
+public void methodA() {
+    this.methodB();   // self-invocation
+}
+
+@Transactional
+public void methodB() { ... }
+```
+
+`this` is the real target object, not the proxy.
+
+```text
+methodA()
+↓
+this.methodB()
+↓
+goes straight to the real method
+↓
+proxy is skipped
+↓
+TransactionInterceptor does not run
+↓
+no Spring transaction from methodB
+```
+
+`@Transactional` works only when the call goes **through the proxy**.  
+An outside caller (`employeeService.methodB()`) goes through the proxy.  
+`this.methodB()` does not.
+
+This is the same Day 8 proxy rule. It also applies to `@Transactional`, `@Async`, `@Cacheable`.
+
+---
+
+## Cross-service proxy
+
+**Cross-service proxy** = one Spring bean calling a **different** Spring bean that was injected.
+
+Example: `EmployeeService` calls `paymentGateway.pay(...)`.
+
+`paymentGateway` is not `this`. It is another bean given by Spring. Spring gives the **proxy** of `StripePaymentGateway`.
+
+```text
+EmployeeService
+↓
+paymentGateway.pay(...)     // call to another bean
+↓
+StripePaymentGateway proxy
+↓
+TransactionInterceptor
+↓
+real pay() method
+```
+
+That is why `@Transactional` on `pay()` can work. The call crosses a proxy boundary.
+
+Difference:
+
+```text
+this.method()              → same object, proxy skipped
+otherBean.method()         → other bean's proxy is used
+```
+
+---
+
+
 # Important Teaching Rules for Continuation
 
 Do NOT restart:
@@ -1300,10 +1508,21 @@ Do NOT restart:
 - AOP basics
 - proxy basics
 - pointcut designators
+- `@Transactional` internals
+- propagation (REQUIRED / REQUIRES_NEW / MANDATORY)
+- self-invocation / proxy bypass
 
-Do NOT turn Day 9 into a generic transaction theory lecture.
+Do NOT dump Day 10 theory at once.
 
-Do NOT dump all remaining Day 9 theory at once.
+Do NOT start the next day until God-Level notebook notes for the finished day are written.
+
+Do NOT start a new day's topics until the Jira ticket for that day is created and I say Done / created.
+
+God-Level notes style:
+- Simple language
+- Define important terms
+- Enough to revise later without the chat
+- No repetition, no lecture dump
 
 Teach interactively:
 
@@ -1331,4 +1550,96 @@ Let me write the code.
 
 If I provide an explanation, first evaluate it, then refine only what's necessary.
 
-**Continue from the practical REQUIRED experiment.**
+---
+
+# Day 10 — Spring Web / REST 🚧 IN PROGRESS
+
+## Day 10 Objective
+
+Connect:
+
+```text
+Day 7 — Spring Boot
+        +
+Day 9 — Transaction on the service
+        ↓
+Day 10 — Spring Web / REST
+```
+
+The service layer is ready. The app still has no way to receive an HTTP request.
+
+Current:
+
+```text
+main()
+↓
+ApplicationContext
+↓
+EmployeeService
+↓
+EmployeeDAO
+↓
+MySQL
+```
+
+Needed:
+
+```text
+HTTP Request
+↓
+DispatcherServlet
+↓
+Controller
+↓
+EmployeeService (@Transactional)
+↓
+EmployeeDAO
+↓
+MySQL
+↓
+HTTP Response
+```
+
+Core question:
+
+> **Why does this application need a web layer, and what actually happens between an HTTP request and EmployeeService?**
+
+Mental model being built:
+
+```text
+Client (browser / Postman)
+↓
+HTTP
+↓
+Embedded Web Server
+↓
+DispatcherServlet
+↓
+Controller
+↓
+EmployeeService
+↓
+DAO
+↓
+Database
+```
+
+Transaction boundary stays on the **service**. Already decided. Do not move it to the controller.
+
+---
+
+# Day 10 Experiment 1 — Baseline ✅
+
+Observed from current app (no web starter, work starts from `main()`):
+
+1. Postman **cannot** call this app. Nothing is listening on a port. There is no web server (Tomcat). The app is not open to HTTP.
+2. After `updateName()` finishes, `main()` has nothing left to do. There is no server thread keeping the JVM alive, so the process ends.
+3. A controller will be the HTTP entry point. It maps a route (URL + HTTP method) to a Java method, which then calls `EmployeeService`. It does not own the business operation or the transaction.
+
+---
+
+# Day 10 Experiment 2 — Add the web starter 🚧 NEXT
+
+Add `spring-boot-starter-web`. Observe startup. Do not create a controller yet.
+
+
