@@ -1638,8 +1638,67 @@ Observed from current app (no web starter, work starts from `main()`):
 
 ---
 
-# Day 10 Experiment 2 — Add the web starter 🚧 NEXT
+# Day 10 Experiment 2 — Add the web starter ✅
 
-Add `spring-boot-starter-web`. Observe startup. Do not create a controller yet.
+Added `spring-boot-starter-web`.
+
+Observed:
+
+```text
+Tomcat initialized with port 8080 (http)
+Tomcat started on port 8080 (http) with context path '/'
+Started SpringBoot30DayApplication
+```
+
+The process stays running. Embedded Tomcat is listening. That is why the JVM does not exit.
+
+`main()` should no longer call `EmployeeService` directly. HTTP should trigger the service later.
+
+---
+
+# Day 10 Experiment 3 — Hit the app with no controller ✅
+
+Hit `http://localhost:8080` → **404**.
+
+Tomcat received the HTTP request. There was no route mapped to `/`, so Spring had no Java method to call. `EmployeeService` was never reached.
+
+404 here means: server is up, **handler method is missing**.
+
+---
+
+# Day 10 Experiment 4 — First controller ✅
+
+Created `TestController`:
+
+```java
+@RestController
+@GetMapping("/")
+public String index() { ... }
+```
+
+Chrome `GET /` showed the string. Mapping exists. HTTP reached a Java method.
+
+Flow proved:
+
+```text
+Browser
+↓
+Tomcat :8080
+↓
+DispatcherServlet
+↓
+TestController.index()
+↓
+HTTP response body
+```
+
+---
+
+# Day 10 Experiment 5 — Controller → EmployeeService 🚧 NEXT
+
+Inject `EmployeeService` into a controller. Map something like `GET /employees/{id}`. Controller stays thin. No `@Transactional` on the controller.
+
+
+
 
 
