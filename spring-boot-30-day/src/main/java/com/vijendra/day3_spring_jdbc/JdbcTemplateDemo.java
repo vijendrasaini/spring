@@ -18,7 +18,7 @@ public class JdbcTemplateDemo {
     static void main(String[] args) {
         HikariConfig hikariConfig = new HikariConfig();
 
-        hikariConfig.setJdbcUrl("jdbc:mysql://localhost:3306/spring_boot_30_day");
+        hikariConfig.setJdbcUrl("jdbc:mysql://localhost:3306/spring_boot_30_days");
         hikariConfig.setUsername("root");
         hikariConfig.setPassword("root");
         hikariConfig.setMaximumPoolSize(1);

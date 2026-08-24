@@ -14,7 +14,7 @@ public class EmployeeDAO {
     private final String dbName;
 
     public EmployeeDAO() {
-        this.dbName = "spring_boot_30_day";
+        this.dbName = "spring_boot_30_days";
         this.dbHost = "jdbc:mysql://localhost:3306/" + this.dbName;
         this.dbUser = "root";
         this.dbPassword = "root";
