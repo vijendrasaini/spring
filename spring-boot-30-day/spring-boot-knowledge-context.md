@@ -1694,9 +1694,101 @@ HTTP response body
 
 ---
 
-# Day 10 Experiment 5 — Controller → EmployeeService 🚧 NEXT
+# Day 10 Experiment 5 — Controller → EmployeeService ✅
 
-Inject `EmployeeService` into a controller. Map something like `GET /employees/{id}`. Controller stays thin. No `@Transactional` on the controller.
+`TestController` injects `EmployeeService` through the constructor.
+
+Mapped:
+
+- `GET /` → string body
+- `GET /employees` → `employeeService.getAllEmployees()` → `List<Employee>`
+
+Controller stays thin. No `@Transactional` on the controller.
+
+Flow proved:
+
+```text
+HTTP GET /employees
+↓
+DispatcherServlet
+↓
+TestController.getAllEmployees()
+↓
+EmployeeService
+↓
+EmployeeDAO
+↓
+MySQL
+↓
+JSON response body
+```
+
+Returning `List<Employee>` becomes JSON because `@RestController` writes the return value as the body, and **Jackson** (from `starter-web`) converts Java objects to JSON.
+
+---
+
+# Day 10 Experiment 6 — GET one employee (`@PathVariable`) ✅
+
+Mapped on `EmployeeController`:
+
+- `GET /employees` → list
+- `GET /employees/{id}` → one employee
+
+Both tested and working when the row exists.
+
+The mapping **works**. Earlier 500 was not a missing route.
+
+`404` = DispatcherServlet found no handler.
+`500` = handler ran, then an exception escaped.
+
+Empty table + `queryForObject` → `EmptyResultDataAccessException` → HTTP 500.
+
+The exception is in the **server log**. The HTTP JSON body hides the Java exception name by default.
+
+"No row" should later become HTTP **404**, not 500. That is a later experiment.
+
+---
+
+# Day 10 Experiment 7 — POST + `@RequestBody` ✅
+
+`POST /employee/create` with `@RequestBody Employee` works.
+
+`@RequestBody` = read JSON body → Jackson → Java object → method argument.
+
+**405 lesson:** curl was `POST /employees/create`. That path matches `GET /employees/{id}` with `{id} = "create"`. Only GET is allowed on that pattern → **405**, not a missing POST method in general.
+
+The mapped path was `POST /employee/create` (singular). URL and mapping must be the same string.
+
+---
+
+# Day 10 Experiment 8 — CRUD routes + class `@RequestMapping` ✅
+
+`@RequestMapping("/employees")` on the class. Methods add only the rest.
+
+Tested via Postman:
+
+```text
+GET    /employees
+GET    /employees/{id}
+POST   /employees
+PATCH  /employees/{id}    (name only — partial update)
+DELETE /employees/{id}
+```
+
+URL = noun. HTTP method = verb. No `/create` in the path.
+
+PATCH (some fields) is not PUT (replace the whole resource). Current update only changes name, so PATCH fits.
+
+---
+
+# Day 10 Experiment 9 — Missing employee should be 404 🚧 NEXT
+
+`GET /employees/{id}` when no row exists still becomes **500** (`EmptyResultDataAccessException`).
+
+The client asked for a resource that is not there. That is **404 Not Found**, not a server crash.
+
+
+
 
 
 
