@@ -23,7 +23,7 @@ public class EmployeeService {
         this.paymentGateway = paymentGateway;
     }
 
-    public int create(Employee employee) {
+    public Employee create(Employee employee) {
         return employeeDAO.create(employee);
     }
 
