@@ -1511,8 +1511,11 @@ Do NOT restart:
 - `@Transactional` internals
 - propagation (REQUIRED / REQUIRES_NEW / MANDATORY)
 - self-invocation / proxy bypass
+- `spring-boot-starter` vs `spring-boot-starter-web`
+- DispatcherServlet / `@RestController` / CRUD URLs
+- `@PathVariable` / `@RequestBody`
 
-Do NOT dump Day 10 theory at once.
+Do NOT dump Day 11 theory at once.
 
 Do NOT start the next day until God-Level notebook notes for the finished day are written.
 
@@ -1552,7 +1555,7 @@ If I provide an explanation, first evaluate it, then refine only what's necessar
 
 ---
 
-# Day 10 — Spring Web / REST 🚧 IN PROGRESS
+# Day 10 — Spring Web / REST ✅
 
 ## Day 10 Objective
 
@@ -1781,11 +1784,168 @@ PATCH (some fields) is not PUT (replace the whole resource). Current update only
 
 ---
 
-# Day 10 Experiment 9 — Missing employee should be 404 🚧 NEXT
+# Day 10 Experiment 9 — Missing employee should be 404 ⏸ LATER
 
-`GET /employees/{id}` when no row exists still becomes **500** (`EmptyResultDataAccessException`).
+Parked. `@ExceptionHandler` / `@ControllerAdvice` not studied yet.
 
-The client asked for a resource that is not there. That is **404 Not Found**, not a server crash.
+Until then: no row + `queryForObject` → `EmptyResultDataAccessException` → HTTP **500**. That is Spring's default, not a wrong mapping.
+
+Day 10 core = **DONE**. Exception handlers = later.
+
+---
+
+# Day 10 — God-Level Notes (Notebook)
+
+## Why a web layer
+
+Before Day 10, `main()` called `EmployeeService`. Only your process could use the app.
+
+A **web layer** opens an HTTP door so Postman, a browser, or a mobile app can call the same service.
+
+`main()` only **starts** the app. It does not call the service.
+
+`@Transactional` stays on the **service**. The controller is HTTP only.
+
+---
+
+## Starters
+
+A **starter** is a Maven pack: one dependency pulls a set of libraries.
+
+**`spring-boot-starter`** = Boot container, auto-config, logging. No HTTP. No port.
+
+**`spring-boot-starter-web`** = that core pack, plus:
+
+- **Embedded Tomcat** = a web server that runs **inside** your JVM. It opens a port (usually 8080) and keeps the process alive.
+- **Spring MVC** = maps HTTP (path + method) to a Java method.
+- **Jackson** = Java object ↔ JSON.
+
+```text
+starter        = Boot app, no HTTP door
+starter-web    = Boot app + HTTP door + server that stays running
+```
+
+---
+
+## Request flow
+
+**DispatcherServlet** = Spring MVC’s front door. Every HTTP request goes there first. It finds the matching controller method and calls it.
+
+```text
+Client (Postman / browser)
+↓
+HTTP
+↓
+Embedded Tomcat :8080
+↓
+DispatcherServlet
+↓
+Controller
+↓
+EmployeeService
+↓
+DAO / JdbcTemplate
+↓
+MySQL
+↓
+Java object
+↓
+Jackson JSON
+↓
+HTTP response
+```
+
+---
+
+## Controller annotations
+
+**`@RestController`** = this class is a Spring bean that handles HTTP, and the **return value is the HTTP body** (not a page name).
+
+- Return `String` → that string is the body.
+- Return `Employee` or `List<Employee>` → Jackson turns it into JSON.
+
+**`@RequestMapping("/employees")`** on the **class** = every method path starts with `/employees`.
+
+**`@GetMapping` / `@PostMapping` / `@PatchMapping` / `@DeleteMapping`** = this method handles that HTTP method + path.
+
+They only **register a mapping**. They do not talk to the database and they do not start a transaction.
+
+---
+
+## Path variable vs request body
+
+A **path variable** is a **data** piece inside the URL.
+
+```text
+GET /employees/1
+         |        |
+         noun     data (id = 1)
+```
+
+`{id}` is a placeholder. **`@PathVariable`** copies that piece into a method argument. The URL is text, so `"1"` is converted to `int`.
+
+A **request body** is the JSON (or other payload) **after** the headers. Used when the client **sends an object**, usually on POST/PATCH/PUT.
+
+**`@RequestBody`** = read the body → Jackson → Java object → method argument.
+
+```text
+GET     data in the URL      @PathVariable
+POST    data in the JSON     @RequestBody
+```
+
+`@PathVariable` is not `@RequestParam`.  
+`/employees/1` = path variable.  
+`/employees?id=1` = query parameter (`@RequestParam`). We used the first style.
+
+---
+
+## CRUD URLs
+
+The URL is the **noun** (resource), usually plural. The HTTP method is the **verb**. Do not put `create` / `get` / `delete` in the path.
+
+```text
+GET    /employees         list
+GET    /employees/{id}    one
+POST   /employees         create
+PATCH  /employees/{id}    change some fields
+PUT    /employees/{id}    replace the whole resource
+DELETE /employees/{id}    delete
+```
+
+**PATCH** = some fields. **PUT** = whole object. Name-only update → PATCH.
+
+Do not use `/employees/create`. `{id}` will treat `create` as an id.
+
+---
+
+## Status codes we hit
+
+**404** (no mapping) = Tomcat is up. DispatcherServlet found **no** Java method for that URL.
+
+**405 Method Not Allowed** = this **path pattern** exists, but not for this HTTP method.
+
+Example: `POST /employees/create` matched `GET /employees/{id}` with `id = "create"`. Only GET was allowed → 405.
+
+**500** = a method **was** found and it ran. Then an exception escaped.
+
+Example: no row for that id → `queryForObject` needs exactly one row → `EmptyResultDataAccessException` → 500.
+
+The exception **is** thrown. It is in the **server log**. The HTTP JSON is a generic `"Internal Server Error"` because Spring hides Java exception names from the client by default.
+
+Missing employee **should** be 404, not 500. That mapping (exception handler) is **later**.
+
+---
+
+## Controller vs service
+
+```text
+Controller  = HTTP door (route, path variable, body, JSON)
+Service     = business operation and transaction boundary
+DAO         = SQL
+```
+
+The controller injects the service (constructor). It does not contain JDBC. It does not get `@Transactional`.
+
 
 
 
