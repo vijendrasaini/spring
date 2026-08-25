@@ -19,9 +19,4 @@ public class TestController {
     public String index() {
         return "Day 10 web layer is up";
     }
-
-    @GetMapping("/employees")
-    public List<Employee> getAllEmployees() {
-        return employeeService.getAllEmployees();
-    }
 }

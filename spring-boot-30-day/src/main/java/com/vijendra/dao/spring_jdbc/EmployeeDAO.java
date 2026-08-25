@@ -34,7 +34,7 @@ public class EmployeeDAO {
         return jdbcTemplate.query(query, getRowMapper());
     }
 
-    public int create(Employee employee) {
+    public Employee create(Employee employee) {
         String query = """
                 INSERT INTO employees(name, email, salary, department)
                 VALUES (?, ?, ?, ?)
@@ -65,7 +65,8 @@ public class EmployeeDAO {
             throw new IllegalStateException("Generated employee ID was not returned");
         }
 
-        return insertedEmployeeId.intValue();
+        int employeeId = insertedEmployeeId.intValue();
+        return get(employeeId);
     }
 
     public Employee get(int id) {
