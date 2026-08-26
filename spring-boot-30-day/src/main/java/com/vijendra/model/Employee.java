@@ -2,12 +2,27 @@ package com.vijendra.model;
 
 import java.math.BigDecimal;
 
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
+
 public class Employee {
 
     private int id;
+
+    @Size(min = 5, max = 50)
+    @Pattern(regexp = "^[a-zA-Z0-9 ]+$", message = "must contain only letters, digits, and spaces")
     private String name;
+
+    @Email
     private String email;
+
+    @NotNull
     private BigDecimal salary;
+
+    @NotBlank
     private String department;
 
     public Employee(String name, String email) {

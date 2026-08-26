@@ -20,6 +20,8 @@ import org.springframework.web.bind.annotation.RestController;
 import com.vijendra.model.Employee;
 import com.vijendra.service.EmployeeService;
 
+import jakarta.validation.Valid;
+
 @RestController
 @RequestMapping("/employees")
 public class EmployeeController {
@@ -39,7 +41,7 @@ public class EmployeeController {
     }
 
     @PostMapping()
-    public Employee createEmployee(@RequestBody Employee employee) {
+    public Employee createEmployee(@Valid @RequestBody Employee employee) {
         return this.employeeService.create(employee);
     }
 

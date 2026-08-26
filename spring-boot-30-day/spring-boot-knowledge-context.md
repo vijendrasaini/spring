@@ -2203,6 +2203,209 @@ ResponseEntity<ErrorResponse>
 right status + simple JSON
 ```
 
+---
+
+# Day 12 — Bean Validation 🚧 IN PROGRESS
+
+## Day 12 Objective
+
+Connect:
+
+```text
+Day 10 — REST + @RequestBody
+        +
+Day 11 — GlobalExceptionHandler
+        ↓
+Day 12 — Bean Validation
+```
+
+Today `POST /employees` accepts any JSON shape that Jackson can map. Empty name, blank email, missing salary — can still reach the DAO.
+
+Core question:
+
+> **How does Spring reject bad input before the service runs, and how does that become HTTP 400 with our ErrorResponse?**
+
+Mental model:
+
+```text
+JSON body
+↓
+@RequestBody + @Valid
+↓
+Bean Validation rules (@NotBlank, @Email, ...)
+↓
+OK → Controller → Service → DAO
+FAIL → MethodArgumentNotValidException
+↓
+GlobalExceptionHandler
+↓
+400 + ErrorResponse
+```
+
+Jira ticket created.
+
+---
+
+# Day 12 Experiment 1 — Baseline ✅
+
+POST with empty/invalid fields → **200** and row inserted. Wrong.
+
+Client sent bad data. That should fail at the **web edge** before service/DAO. Not 200. Not a silent bad insert.
+
+---
+
+# Day 12 Experiment 2 — Add validation starter ✅
+
+Added `spring-boot-starter-validation`.
+
+Observed: dependency alone does **not** reject bad POST.
+
+Reason:
+
+```text
+Starter
+↓
+validation tools available
+↓
+rules still not defined
+↓
+validation still not triggered
+```
+
+Field annotations define **rules**. `@Valid` is the **trigger** for this request parameter.
+
+---
+
+# Day 12 Experiment 3 — First rule + `@Valid` ✅
+
+Added one rule (`@NotBlank` on `name`) and `@Valid` on the POST body parameter.
+
+Observed: bad input now fails with HTTP **400** before reaching service/DAO.
+
+The exception appears in the server log. Validation is active.
+
+```text
+JSON
+↓
+Jackson builds Employee
+↓
+@Valid triggers Bean Validation
+↓
+@NotBlank on name fails
+↓
+MethodArgumentNotValidException
+↓
+400 Bad Request
+```
+
+---
+
+# Day 12 Experiment 4 — Custom body for validation failure ✅
+
+Handled `MethodArgumentNotValidException` in `GlobalExceptionHandler`.
+
+Observed: validation failure now returns HTTP **400** with our own `ErrorResponse`.
+
+---
+
+# Day 12 Experiment 5 — More field rules ✅
+
+Added more rules:
+
+- `email` → `@Email`
+- `department` → `@NotBlank`
+- `salary` → `@NotNull`
+
+Observed: bad input still returns the same generic 400 message. Validation works, but the client still does not know **which field** failed.
+
+---
+
+# Day 12 Experiment 6 — Field-wise validation message ✅
+
+Read the first field error from `MethodArgumentNotValidException`.
+
+Observed:
+
+```json
+{
+  "status": 400,
+  "message": "name: must not be blank"
+}
+```
+
+This is more useful than a generic “Invalid employee data”.
+
+---
+
+# Day 12 Experiment 7 — First error vs all errors ✅
+
+Chose **all field errors**.
+
+`ErrorResponse.errors` = `Map<String, List<String>>`
+
+- key = field name
+- value = list of messages for that field
+
+Observed one request can return multiple fields at once:
+
+```json
+{
+  "status": 400,
+  "message": "Invalide Request Data",
+  "errors": {
+    "name": ["must not be blank"],
+    "email": ["must be a well-formed email address"],
+    "salary": ["must not be null"],
+    "department": ["must not be blank"]
+  }
+}
+```
+
+A `List` per field supports future cases where one field has several rules failing.
+
+---
+
+# Day 12 CURRENT POSITION — CORE DONE ✅
+
+- Baseline: bad POST still inserts (200) ✅
+- `spring-boot-starter-validation` alone does nothing ✅
+- Rules ≠ trigger (`@NotBlank` needs `@Valid`) ✅
+- `@Valid` + field rules → `MethodArgumentNotValidException` → 400 ✅
+- Custom `ErrorResponse` for validation ✅
+- All field errors as `Map<String, List<String>>` ✅
+
+---
+
+# Day 12 Experiment 8 — Handy annotations + multi-rule field ✅
+
+Multiple rules on one field can fail together. `errors.name` is a **list**.
+
+Observed for `name: ""`:
+
+```json
+"name": [
+  "must not be blank",
+  "must be greater than or equal to 5"
+]
+```
+
+That proves `Map<String, List<String>>`.
+
+Important correction: `@Min(5)` on a **String** is not “min 5 characters.” `@Min` / `@Max` are for **numbers**. For string length use `@Size(min = 5, max = 50)`.
+
+---
+
+# Day 12 CURRENT POSITION — READY TO CLOSE ✅
+
+Core + multi-field errors + multi-rule field proven.
+Handy annotation set covered.
+One correction pending: replace `@Min` on `name` with `@Size` if the intent is length.
+
+
+
+
+
+
 
 
 
