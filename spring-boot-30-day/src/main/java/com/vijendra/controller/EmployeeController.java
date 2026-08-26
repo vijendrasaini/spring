@@ -52,11 +52,4 @@ public class EmployeeController {
     public boolean updatEmployee(@RequestBody Employee employee, @PathVariable int id) {
         return this.employeeService.updateEmployeeName(id, employee.getName());
     }
-
-    @ResponseStatus(HttpStatus.NOT_FOUND)
-    @ExceptionHandler(EmptyResultDataAccessException.class)
-    public ResponseEntity<String> handleNotFound(EmptyResultDataAccessException exception) {
-        // return "Employee Not found";
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Employee Not Found");
-    }
 }

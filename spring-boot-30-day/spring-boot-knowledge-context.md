@@ -2009,9 +2009,28 @@ Observed: missing id → HTTP **404** + simple string body.
 
 ---
 
-# Day 11 Experiment 3 — Scope of controller `@ExceptionHandler` 🚧 NEXT
+# Day 11 Experiment 3 — Scope of controller `@ExceptionHandler` ✅
 
-Prove: a handler on `EmployeeController` only covers exceptions from **that** controller’s requests.
+Controller-level `@ExceptionHandler` only covers that controller’s requests.
+
+Copying the same handler into every controller is a design smell (duplication, painful changes).
+
+---
+
+# Day 11 Experiment 4 — `@ControllerAdvice` ✅
+
+Moved handler to `GlobalExceptionHandler` with `@RestControllerAdvice`.
+Removed from `EmployeeController`.
+
+Missing id still → **404** + message. One place for the whole app.
+
+---
+
+# Day 11 Experiment 5 — Simple error JSON body 🚧 NEXT
+
+A plain string works. Prefer a small structured body (e.g. message + status) so every error looks the same.
+
+
 
 
 

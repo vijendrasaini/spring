@@ -51,7 +51,7 @@ public class SpringJdbcDemo {
         employee.setDepartment("TV");
         employee.setSalary(new BigDecimal("85000.33"));
 
-        int id = employeeService.create(employee);
+        int id = 1; //employeeService.create(employee);
         getEmployee(id);
     }
 
