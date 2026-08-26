@@ -1946,6 +1946,76 @@ DAO         = SQL
 
 The controller injects the service (constructor). It does not contain JDBC. It does not get `@Transactional`.
 
+---
+
+# Day 11 — Web Exception Handling 🚧 IN PROGRESS
+
+## Day 11 Objective
+
+Connect:
+
+```text
+Day 5 — DataAccessException
+        +
+Day 10 — HTTP / REST
+        ↓
+Day 11 — Web exception handling
+```
+
+Day 10 parked this: missing employee → `EmptyResultDataAccessException` → HTTP **500**.
+
+Wrong meaning. The route worked. The resource is missing. That should be **404**.
+
+Core question:
+
+> **How does the web layer turn a Java exception into the right HTTP status and a readable body, without leaking internals?**
+
+Mental model:
+
+```text
+Controller / Service / DAO
+↓
+Java exception
+↓
+@ExceptionHandler / @ControllerAdvice
+↓
+HTTP status + simple JSON
+```
+
+Jira ticket created.
+
+---
+
+# Day 11 Experiment 1 — Baseline ✅
+
+`GET /employees/{missing-id}` → HTTP **500**.
+
+Understood:
+
+- 500 means “server error” to the client. That meaning is wrong here. The server is fine. The employee does not exist.
+- The **route did not fail**. DispatcherServlet found `getEmployee`.
+- The controller method **did run**. Then DAO `queryForObject` threw `EmptyResultDataAccessException`. That exception was not translated to HTTP by us, so Boot defaulted to 500.
+- Turning Java exception → HTTP status is the **web layer’s** job (controller / `@ExceptionHandler`), not the DAO and not the service.
+
+---
+
+# Day 11 Experiment 2 — First `@ExceptionHandler` ✅
+
+Added `@ExceptionHandler(EmptyResultDataAccessException.class)` on `EmployeeController`.
+
+Observed: missing id → HTTP **404** + simple string body.
+
+`getEmployee` stays without try/catch. Exception bubbles up. Handler translates to HTTP.
+
+---
+
+# Day 11 Experiment 3 — Scope of controller `@ExceptionHandler` 🚧 NEXT
+
+Prove: a handler on `EmployeeController` only covers exceptions from **that** controller’s requests.
+
+
+
+
 
 
 
