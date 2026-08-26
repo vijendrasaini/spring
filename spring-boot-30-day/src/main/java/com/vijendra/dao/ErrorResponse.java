@@ -1,7 +1,4 @@
 package com.vijendra.dao;
-
-import org.springframework.http.HttpStatus;
-
 public class ErrorResponse {
     private int status;
     private String message;

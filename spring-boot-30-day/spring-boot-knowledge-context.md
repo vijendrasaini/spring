@@ -1514,8 +1514,10 @@ Do NOT restart:
 - `spring-boot-starter` vs `spring-boot-starter-web`
 - DispatcherServlet / `@RestController` / CRUD URLs
 - `@PathVariable` / `@RequestBody`
+- `@ExceptionHandler` / `@RestControllerAdvice`
+- EmptyResult → 404 / type mismatch → 400
 
-Do NOT dump Day 11 theory at once.
+Do NOT dump Day 12 theory at once.
 
 Do NOT start the next day until God-Level notebook notes for the finished day are written.
 
@@ -1948,7 +1950,7 @@ The controller injects the service (constructor). It does not contain JDBC. It d
 
 ---
 
-# Day 11 — Web Exception Handling 🚧 IN PROGRESS
+# Day 11 — Web Exception Handling ✅
 
 ## Day 11 Objective
 
@@ -2026,9 +2028,182 @@ Missing id still → **404** + message. One place for the whole app.
 
 ---
 
-# Day 11 Experiment 5 — Simple error JSON body 🚧 NEXT
+# Day 11 Experiment 5 — Simple error JSON body ✅
 
-A plain string works. Prefer a small structured body (e.g. message + status) so every error looks the same.
+`ErrorResponse` with `status` + `message`. Handler returns `ResponseEntity<ErrorResponse>`.
+
+Missing id → **404** + structured JSON. No Java exception class name in the body.
+
+---
+
+# Day 11 Experiment 6 — Invalid path variable → 400 ✅
+
+`GET /employees/abc` → `MethodArgumentTypeMismatchException`.
+
+Spring’s default was already **400** (unlike empty row → 500). Custom `@ExceptionHandler` still useful: same `ErrorResponse` shape for every API error.
+
+```text
+EmptyResultDataAccessException      → 404  (valid id, no row)
+MethodArgumentTypeMismatchException → 400  (id not convertible to int)
+```
+
+---
+
+# Day 11 CURRENT POSITION — CORE DONE ✅
+
+- Baseline missing row → 500 (wrong meaning) ✅
+- `@ExceptionHandler` on controller ✅
+- `@RestControllerAdvice` global ✅
+- Empty row → 404 + `ErrorResponse` ✅
+- Bad path type → 400 + `ErrorResponse` ✅
+
+Ready for day review → God-level notes → Jira Done.
+
+Day 11 = **DONE**
+
+---
+
+# Day 11 — God-Level Notes (Notebook)
+
+## Why this day
+
+Day 10 made HTTP work. Missing employee still became HTTP **500**.
+
+500 means “server broke.” Here the server is fine. The resource is missing. That should be **404**.
+
+Day 5’s exception is still useful inside Java. Day 11 teaches the **web layer** to turn that exception into the right HTTP status and a simple body.
+
+```text
+Day 5  — exception in DAO/service
+Day 10 — HTTP door
+Day 11 — exception → HTTP status + readable JSON
+```
+
+---
+
+## Layer rule
+
+```text
+DAO / Service  → throw or propagate the exception
+Web layer      → translate it to HTTP
+```
+
+Do **not** catch-and-hide inside `getEmployee` just to return a string.  
+Do **not** put HTTP status logic in the DAO.
+
+Controller methods stay clean. No try/catch required for this pattern.
+
+---
+
+## What happens without a handler
+
+```text
+GET /employees/99999
+↓
+route matches, getEmployee runs
+↓
+queryForObject → 0 rows
+↓
+EmptyResultDataAccessException
+↓
+nothing maps it to HTTP
+↓
+Spring Boot default → 500
+```
+
+Exception **is** thrown. It is in the **server log**. The client only sees a generic Internal Server Error unless you handle it.
+
+---
+
+## `@ExceptionHandler`
+
+**`@ExceptionHandler`** = a method Spring calls when a given exception type escapes from a request.
+
+First used **on the controller**. Scope = **that controller only**.
+
+```text
+exception leaves getEmployee
+↓
+@ExceptionHandler on EmployeeController
+↓
+you choose status + body
+```
+
+**`@ResponseStatus`** = set HTTP status on a method.  
+**`ResponseEntity`** = you control status + body in one object. Use one approach; both together is redundant.
+
+---
+
+## `@RestControllerAdvice`
+
+Controller-level handlers do not cover other controllers. Copying the same handler everywhere is a design smell.
+
+**`@ControllerAdvice`** = a bean that can hold `@ExceptionHandler` methods for **many** controllers.
+
+**`@RestControllerAdvice`** = `@ControllerAdvice` + response-body style (like `@RestController`). Best for REST APIs.
+
+```text
+Any controller
+↓
+exception escapes
+↓
+GlobalExceptionHandler
+↓
+HTTP status + ErrorResponse
+```
+
+One place. Change once. Applies app-wide (for controllers Spring wires to that advice).
+
+---
+
+## Error body
+
+**`ErrorResponse`** = a small object for the client, e.g. `status` + `message`.
+
+Same shape for every handled error. Do **not** put the Java exception class name in the body.
+
+Prefer package `dto` / `exception`, not `dao`. It is not a DAO class.
+
+---
+
+## Two mappings we practiced
+
+```text
+EmptyResultDataAccessException
+→ valid id, no row in DB
+→ 404 Not Found
+
+MethodArgumentTypeMismatchException
+→ path value cannot become int (e.g. /employees/abc)
+→ fails while binding, before service/DAO
+→ 400 Bad Request
+```
+
+For type mismatch, Spring’s **default status was already 400**. The custom handler’s main win is the **same ErrorResponse body**, not inventing 400 from scratch.
+
+For empty row, Spring’s default was **500**. The handler’s win is both **correct status (404)** and **consistent body**.
+
+---
+
+## Final mental model
+
+```text
+HTTP request
+↓
+Controller (no try/catch needed)
+↓
+Service → DAO
+↓
+Java exception
+↓
+@RestControllerAdvice + @ExceptionHandler
+↓
+ResponseEntity<ErrorResponse>
+↓
+right status + simple JSON
+```
+
+
 
 
 
