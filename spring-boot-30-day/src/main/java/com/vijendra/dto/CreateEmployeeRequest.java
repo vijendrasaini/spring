@@ -1,25 +1,29 @@
-package com.vijendra.model;
+package com.vijendra.dto;
 
 import java.math.BigDecimal;
 
-public class Employee {
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 
-    private int id;
-
+public class CreateEmployeeRequest {
+    // fields
+    @Size(min = 5, max = 50)
+    @Pattern(regexp = "^[a-zA-Z0-9 ]+$", message = "must contain only letters, digits, and spaces")
     private String name;
+
+    @Email
     private String email;
+
+    @NotNull
     private BigDecimal salary;
+
+    @NotBlank
     private String department;
 
-    public Employee(String name, String email) {
-        this.name = name;
-        this.email = email;
-    }
-
-    public int getId() {
-        return id;
-    }
-
+    // Getters
     public String getName() {
         return name;
     }
@@ -36,10 +40,7 @@ public class Employee {
         return department;
     }
 
-    public void setId(int id) {
-        this.id = id;
-    }
-
+    // setters
     public void setName(String name) {
         this.name = name;
     }

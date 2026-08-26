@@ -1,5 +1,6 @@
 package com.vijendra.controller;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import org.springframework.dao.EmptyResultDataAccessException;
@@ -17,6 +18,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.vijendra.dto.CreateEmployeeRequest;
+import com.vijendra.dto.EmployeeResponse;
+import com.vijendra.dto.UpdateEmployeeNameRequest;
 import com.vijendra.model.Employee;
 import com.vijendra.service.EmployeeService;
 
@@ -26,32 +30,53 @@ import jakarta.validation.Valid;
 @RequestMapping("/employees")
 public class EmployeeController {
     private EmployeeService employeeService;
+
     public EmployeeController(EmployeeService employeeService) {
         this.employeeService = employeeService;
     }
 
     @GetMapping("/{id}")
-    public Employee getEmployee(@PathVariable int id) {
-        return this.employeeService.getEmployee(id);
+    public EmployeeResponse getEmployee(@PathVariable int id) {
+        return toEmployee(this.employeeService.getEmployee(id));
     }
 
     @GetMapping()
-    public List<Employee> getEmployees() {
-        return this.employeeService.getAllEmployees();
+    public List<EmployeeResponse> getEmployees() {
+        List<Employee> employees = this.employeeService.getAllEmployees();
+        return employees.stream().map(employee -> toEmployee(employee)).toList();
     }
 
     @PostMapping()
-    public Employee createEmployee(@Valid @RequestBody Employee employee) {
-        return this.employeeService.create(employee);
+    public ResponseEntity<EmployeeResponse> createEmployee(@Valid @RequestBody CreateEmployeeRequest request) {
+        Employee employee = this.employeeService.create(this.getEmployeeFromRequest(request));
+        return ResponseEntity.status(HttpStatus.CREATED).body(toEmployee(employee));
     }
 
     @DeleteMapping("/{id}")
-    public boolean deletedEmployee(@PathVariable("id") int employeeId) {
-        return this.employeeService.deleteEmployee(employeeId);
+    public ResponseEntity<Void> deletedEmployee(@PathVariable("id") int employeeId) {
+        this.employeeService.deleteEmployee(employeeId);
+        return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
     }
 
     @PatchMapping("/{id}")
-    public boolean updatEmployee(@RequestBody Employee employee, @PathVariable int id) {
-        return this.employeeService.updateEmployeeName(id, employee.getName());
+    public ResponseEntity<Void> updatEmployee(@Valid @RequestBody UpdateEmployeeNameRequest employee, @PathVariable int id) {
+        this.employeeService.updateEmployeeName(id, employee.getName());
+        return ResponseEntity.status(HttpStatus.OK).build();
+    }
+
+    private Employee getEmployeeFromRequest(CreateEmployeeRequest request) {
+        Employee employee = new Employee(request.getName(), request.getEmail());
+        employee.setDepartment(request.getDepartment());
+        employee.setSalary(request.getSalary());
+        return employee;
+    }
+
+    private EmployeeResponse toEmployee(Employee employee) {
+        return new EmployeeResponse(
+                employee.getId(),
+                employee.getName(),
+                employee.getEmail(),
+                employee.getDepartment(),
+                employee.getSalary());
     }
 }
