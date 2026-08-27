@@ -1516,8 +1516,12 @@ Do NOT restart:
 - `@PathVariable` / `@RequestBody`
 - `@ExceptionHandler` / `@RestControllerAdvice`
 - EmptyResult → 404 / type mismatch → 400
+- Bean Validation / `@Valid` / `MethodArgumentNotValidException`
+- `@NotBlank` `@Size` `@Email` `@Pattern` / field error map
+- Request/Response DTO vs domain model
+- `ResponseEntity` / 201 / 204
 
-Do NOT dump Day 12 theory at once.
+Do NOT dump Day 14 theory at once.
 
 Do NOT start the next day until God-Level notebook notes for the finished day are written.
 
@@ -2205,7 +2209,7 @@ right status + simple JSON
 
 ---
 
-# Day 12 — Bean Validation 🚧 IN PROGRESS
+# Day 12 — Bean Validation ✅
 
 ## Day 12 Objective
 
@@ -2399,7 +2403,543 @@ Important correction: `@Min(5)` on a **String** is not “min 5 characters.” `
 
 Core + multi-field errors + multi-rule field proven.
 Handy annotation set covered.
-One correction pending: replace `@Min` on `name` with `@Size` if the intent is length.
+`@Min` on string length corrected to `@Size`. `@Pattern` used for character rules.
+
+Day 12 = **DONE**
+
+---
+
+# Day 12 — God-Level Notes (Notebook)
+
+## Why
+
+`@RequestBody` only builds the object from JSON. It does not judge if the data is valid.
+
+Without validation, bad POST can reach the service/DAO and even insert with **200**. Wrong.
+
+Validate at the **web edge**, before service/DAO. Bad input → **400**.
+
+```text
+Day 10  @RequestBody
+Day 11  GlobalExceptionHandler
+Day 12  @Valid + Bean Validation → 400 + field errors
+```
+
+---
+
+## Starter
+
+**`spring-boot-starter-validation`** is a pack, not one magic class:
+
+- Jakarta Bean Validation API (annotations + contracts)
+- Hibernate Validator (runs the rules)
+- Spring integration (`@Valid` in MVC, exception on fail)
+- Boot auto-config
+
+Adding the starter alone does **not** validate requests. Tools become available. You still need **rules** + **trigger**.
+
+---
+
+## Rules vs trigger
+
+```text
+field annotations   = rules   (@NotBlank, @Email, @Size, ...)
+@Valid              = trigger (validate this request parameter now)
+starter             = support / wiring
+```
+
+Rules without `@Valid` → not run for that controller parameter.  
+`@Valid` without rules → almost nothing useful to check.
+
+```text
+JSON
+↓
+Jackson builds object
+↓
+@Valid runs Bean Validation
+↓
+OK  → controller method runs → service → DAO
+FAIL → MethodArgumentNotValidException
+     → GlobalExceptionHandler
+     → 400 + ErrorResponse
+```
+
+---
+
+## Handy annotations
+
+**Presence**
+
+- `@NotNull` — value must exist. `""` and `0` can still pass.
+- `@NotEmpty` — not null and not empty. Spaces `"   "` can pass for String.
+- `@NotBlank` — String only: not null, not `""`, not only spaces.
+
+**Size / numbers**
+
+- `@Size(min, max)` — string length or collection size.
+- `@Min` / `@Max` — **numbers** only (≥ / ≤). Not for string length.
+- `@Positive` / `@PositiveOrZero` — number > 0 / ≥ 0.
+
+**Format**
+
+- `@Email` — email-shaped string.
+- `@Pattern(regexp = "...")` — must match regex.
+
+**Other**
+
+- `@Past` / `@Future` (and OrPresent variants) — dates/times.
+- `@Digits` — digit shape of a number.
+- `@AssertTrue` / `@AssertFalse` — boolean must be true/false.
+
+Multiple annotations on one field are **AND**. All must pass. Several can fail together.
+
+---
+
+## Error response shape
+
+Prefer all field errors, not only the first.
+
+```text
+ErrorResponse
+- status
+- message
+- errors → Map<String, List<String>>
+```
+
+- key = field name
+- value = list of messages for that field
+
+One field can have several failed rules → a list, not a single string.
+
+`MethodArgumentNotValidException` → `getBindingResult().getFieldErrors()` → group by field.
+
+---
+
+## Mental model
+
+```text
+POST JSON
+↓
+@RequestBody + @Valid
+↓
+field rules
+↓
+fail → MethodArgumentNotValidException
+↓
+@RestControllerAdvice
+↓
+400 + { status, message, errors }
+```
+
+Do not put Bean Validation as the first defense inside the DAO. Web edge rejects bad input. Service/DAO deal with business and SQL.
+
+---
+
+# Day 13 — Request / Response DTOs ✅
+
+## Day 13 Objective
+
+Connect:
+
+```text
+Day 10 — REST (@RequestBody Employee)
+        +
+Day 12 — Validation on Employee
+        ↓
+Day 13 — Separate API DTOs from the domain/DB model
+```
+
+Today the controller accepts and returns `Employee` directly. Validation annotations sit on the same class used for DB mapping. That mixes **API contract** and **persistence model**.
+
+Core question:
+
+> **Why should the HTTP layer not use the database Employee model as the request/response body forever?**
+
+Mental model:
+
+```text
+JSON
+↓
+Request DTO (+ @Valid)
+↓
+Controller
+↓
+map to Employee (domain)
+↓
+Service → DAO → DB
+↓
+map to Response DTO
+↓
+JSON
+```
+
+Jira ticket created.
+
+---
+
+# Day 13 Experiment 1 — Baseline ✅
+
+Understood:
+
+- **DTO** = object whose job is to **carry data** across a boundary (here: HTTP ↔ app). Not business logic. Not SQL.
+- Problem with one `Employee` for HTTP + DB: API may expose or accept fields it should not (e.g. secrets, internal fields, or `id` on create).
+- Validation for the HTTP body belongs on the **request DTO**, not on the persistence `Employee`.
+
+---
+
+# Day 13 Experiment 2 — Create request DTO ✅
+
+Created `CreateEmployeeRequest` with validation. `Employee` is clean again (no validation annotations).
+
+POST flow:
+
+```text
+JSON → CreateEmployeeRequest (@Valid)
+↓
+controller maps to Employee
+↓
+EmployeeService.create(Employee)
+↓
+still returns Employee (next: response DTO)
+```
+
+Service stays on `Employee`. Jackson builds the request DTO via no-arg + setters. JSON number → `BigDecimal` works.
+
+---
+
+# Day 13 Experiment 3 — Response DTO ✅
+
+Created `EmployeeResponse`. GET one, GET list, and POST return response DTOs.
+
+```text
+Service returns Employee
+↓
+controller maps to EmployeeResponse
+↓
+Jackson serializes response DTO to JSON
+```
+
+For serialization (Java → JSON), getters **or** public fields are enough. Setters are for deserialization (JSON → Java).
+
+---
+
+# Day 13 Experiment 4 — Update request DTO (PATCH) ✅
+
+`UpdateEmployeeNameRequest` with validation. PATCH no longer takes `Employee`.
+
+```text
+PATCH → UpdateEmployeeNameRequest (@Valid)
+↓
+service.updateEmployeeName(id, name)
+```
+
+Different API actions can have different request DTOs (create vs update name).
+
+---
+
+# Day 13 CURRENT POSITION — CORE DONE ✅
+
+- DTO = carry data across HTTP boundary ✅
+- Request DTO + validation; Employee stays domain/DB ✅
+- Service still takes Employee (not web DTO) ✅
+- Response DTO for GET/POST ✅
+- Update request DTO for PATCH ✅
+
+---
+
+# Day 13 Experiment 5 — Standard success responses (`ResponseEntity`) ✅
+
+REST success style (no success envelope):
+
+```text
+POST   → 201 CREATED + EmployeeResponse
+PATCH  → 200 OK (no body)   // 204 also fine when body is empty
+DELETE → 204 NO_CONTENT
+GET    → 200 + EmployeeResponse / list
+errors → ErrorResponse
+```
+
+`ResponseEntity` = status + optional body. Client reads success from the **status code**, not from a `boolean`.
+
+---
+
+# Day 13 CURRENT POSITION — READY TO CLOSE ✅
+
+DTOs + standard HTTP success statuses done.
+
+Day 13 = **DONE**
+
+---
+
+# Day 13 — God-Level Notes (Notebook)
+
+## Why DTO
+
+**DTO (Data Transfer Object)** = an object whose job is to **carry data across a boundary**.
+
+Here the boundary is HTTP ↔ application.
+
+Do not use the DB/domain `Employee` as the forever request/response body.
+
+Problems with one class for HTTP + DB:
+
+- may expose or accept fields the API should not (secrets, internal fields, `id` on create)
+- API shape and table shape should be able to change separately
+- validation for HTTP belongs on the request contract, not on the persistence model
+
+```text
+JSON
+↓
+Request DTO (+ @Valid)
+↓
+map
+↓
+Employee (domain)
+↓
+Service → DAO → DB
+↓
+map
+↓
+Response DTO
+↓
+JSON
+```
+
+---
+
+## Request vs response vs domain
+
+| Type | Job |
+|------|-----|
+| `CreateEmployeeRequest` | POST body + validation. No `id`. |
+| `UpdateEmployeeNameRequest` | PATCH body (only what this API changes) + validation |
+| `EmployeeResponse` | what the API returns |
+| `Employee` | domain / DB model. Service and DAO use this. |
+
+Validation annotations live on **request DTOs**, not on `Employee`.
+
+Service methods stay on `Employee` (or primitives like `id` + `name`). Do **not** push web DTOs into the service layer — that couples business code to the HTTP shape.
+
+Controller (or a small mapper) does the mapping.
+
+---
+
+## Jackson and DTOs
+
+**Deserialize** (JSON → Java), e.g. request DTO:
+
+```text
+no-arg constructor
+↓
+setters for JSON properties present
+```
+
+Private fields + getters + setters is the usual style.  
+Public fields also work.  
+JSON number can bind to `BigDecimal`.
+
+Jackson does **not** call every setter. Only setters for properties present in the JSON.
+
+**Serialize** (Java → JSON), e.g. response DTO:
+
+Needs a way to **read** values: getters **or** public fields.  
+Setters are not required for output-only DTOs.
+
+---
+
+## Success responses (standard REST)
+
+Do **not** wrap every success in `{ status, message, data }` unless a client standard forces it.
+
+Prefer:
+
+| Action | Status | Body |
+|--------|--------|------|
+| GET one / list | 200 | `EmployeeResponse` / list |
+| POST create | **201** Created | `EmployeeResponse` |
+| PATCH update | **200** (+ body) or **204** (no body) | not 201 |
+| DELETE | **204** No Content | empty — no `boolean` |
+| Errors | 4xx/5xx | `ErrorResponse` |
+
+**`ResponseEntity`** = you control HTTP status + optional body.
+
+```text
+201 = new resource created
+200 = OK (read/update)
+204 = success, no body
+```
+
+Client learns delete/update success from the **status code**, not from `true`/`false` in JSON.
+
+Errors stay consistent via `GlobalExceptionHandler` + `ErrorResponse`. Success body is the **resource** (or empty).
+
+---
+
+## Mental model
+
+```text
+Web edge:  Request DTO / Response DTO / ErrorResponse / ResponseEntity
+Inside:    Employee + Service + DAO
+```
+
+---
+
+# Day 14 — Spring Data JPA Intro 🚧 IN PROGRESS
+
+## Day 14 Objective
+
+Connect:
+
+```text
+Days 1–3  JDBC / JdbcTemplate / DAO
+Days 10–13 REST API on EmployeeDAO
+        ↓
+Day 14 — Spring Data JPA (new persistence style)
+```
+
+Teach from scratch. Keep JDBC code. Do not dump full JPA theory at once.
+
+Core question:
+
+> **Why map tables to Java objects, and how does Spring Data JPA give CRUD without writing every SQL string yourself?**
+
+Mental model being built:
+
+```text
+Controller / Service
+↓
+JpaRepository (Spring Data)
+↓
+JPA API
+↓
+Hibernate (engine)
+↓
+DataSource / HikariCP
+↓
+MySQL
+```
+
+Jira ticket created.
+
+---
+
+# Day 14 Experiment 1 — ORM WHY (baseline) ✅
+
+With JDBC/JdbcTemplate DAO:
+
+- You write the SQL.
+- You map `ResultSet` → `Employee`.
+
+ORM goal: for common CRUD, the framework generates SQL and maps rows ↔ objects.
+
+You still own: the **mapping rules** (which class/fields ↔ which table/columns), business logic, and special queries when defaults are not enough. You do not only “pass an object” with zero design.
+
+---
+
+# Day 14 Experiment 2 — JPA vs Hibernate vs Spring Data ✅
+
+Simple roles (from scratch):
+
+- **JPA** = specification / API (rules and annotations for persistence). Not a DB driver.
+- **Hibernate** = the common **implementation** that runs those rules (Boot’s default).
+- **Spring Data JPA** = Spring convenience on top: repositories (`save`, `findById`, …) so you rarely touch `EntityManager` at the start.
+
+`EntityManager` = JPA’s lower-level “talk to persistence” API. We skip it for now and use Spring Data repositories first.
+
+---
+
+# Day 14 Experiment 3 — Add `spring-boot-starter-data-jpa` ✅
+
+App still starts. REST JDBC path still works.
+
+Observed in logs:
+
+```text
+Bootstrapping Spring Data JPA repositories
+Found 0 JPA repository interfaces
+Hibernate Processing PersistenceUnitInfo
+Initialized JPA EntityManagerFactory
+```
+
+Meaning: JPA/Hibernate is wired. No entity and no repository yet → **0 repositories**.
+
+(Optional later: `spring.jpa.open-in-view` warning. Park for now.)
+
+---
+
+# Day 14 Experiment 4 — First entity ✅
+
+Created `EmployeeEntity` mapped to `employees`.
+
+```text
+@Entity + @Table + @Id + IDENTITY
+```
+
+App still starts. Hibernate initializes with the entity present.
+
+Duplicate “Database driver / catalog” lines in the console are a Hibernate startup logging quirk, not a failed mapping.
+
+Still `Found 0 JPA repository interfaces` — expected until we create a repository.
+
+Controller still uses DTOs only. Correct.
+
+---
+
+# Day 14 Experiment 5 — First Spring Data repository ✅
+
+```java
+public interface EmployeeRepository extends JpaRepository<EmployeeEntity, Integer> {}
+```
+
+Log: `Found 1 JPA repository interface.` App still works.
+
+Spring created a repository bean from the interface. No SQL written by you yet.
+
+---
+
+# Day 14 Experiment 6 — Call repository from service ✅
+
+`findAll()` and `findById()` used via `EmployeeRepository`.
+Entity → domain `Employee` mapping in the service. Controller/DTOs unchanged.
+
+`findById` returns `Optional<EmployeeEntity>`. Current code uses `.get()`.
+
+Important: missing id no longer throws `EmptyResultDataAccessException` (that was JdbcTemplate). Empty `Optional.get()` → `NoSuchElementException` → likely **500**, not the Day 11 404 handler.
+
+---
+
+# Day 14 Experiment 7 — `Optional` and not-found ✅
+
+`findById` → check empty → throw `NoSuchElementException` with message.
+`GlobalExceptionHandler` maps it to **404** + `ErrorResponse`.
+
+Same idea as `orElseThrow`. Clearer than bare `.get()` with no check.
+
+JDBC empty result was `EmptyResultDataAccessException`. JPA not-found via `Optional` is a different exception path.
+
+---
+
+# Day 14 Experiment 8 — `save()` for create 🚧 NEXT
+
+Use `employeeRepository.save(...)` for create instead of JDBC DAO.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
