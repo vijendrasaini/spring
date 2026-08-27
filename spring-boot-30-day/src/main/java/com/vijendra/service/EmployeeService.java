@@ -32,7 +32,15 @@ public class EmployeeService {
     }
 
     public Employee create(Employee employee) {
-        return employeeDAO.create(employee);
+        EmployeeEntity employeeEntity = new EmployeeEntity();
+        employeeEntity.setName(employee.getName());
+        employeeEntity.setEmail(employee.getEmail());
+        employeeEntity.setDepartment(employee.getDepartment());
+        employeeEntity.setSalary(employee.getSalary());
+
+        employeeEntity = employeeRepository.save(employeeEntity);
+        return toEmployee(employeeEntity);
+        // return employeeDAO.create(employee);
     }
 
     public Employee getEmployee(int employeeId) {
