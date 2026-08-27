@@ -53,7 +53,9 @@ public class EmployeeService {
     }
 
     public boolean deleteEmployee(int employeeId) {
-        return employeeDAO.delete(employeeId);
+        employeeRepository.deleteById(employeeId);
+        return true;
+        // return employeeDAO.delete(employeeId);
     }
 
     public List<Employee> getAllEmployees() {
@@ -64,7 +66,15 @@ public class EmployeeService {
     }
 
     public boolean updateEmployeeName(int id, String name) {
-        return employeeDAO.updateByName(id, name);
+        Optional<EmployeeEntity> employeeOptional = this.employeeRepository.findById(id);
+        if(employeeOptional.isEmpty()) {
+            throw new NoSuchElementException("Employee with id %d not found to update.".formatted(id));
+        }
+
+        EmployeeEntity employeeEntity = employeeOptional.get();
+        employeeEntity.setName(name);
+        this.employeeRepository.save(employeeEntity);
+        return true;
     }
 
     public boolean insertAndUpdateWithTransactionManager(

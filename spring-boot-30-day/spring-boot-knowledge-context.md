@@ -2919,9 +2919,21 @@ JDBC empty result was `EmptyResultDataAccessException`. JPA not-found via `Optio
 
 ---
 
-# Day 14 Experiment 8 — `save()` for create 🚧 NEXT
+# Day 14 Experiment 8 — `save()` for create ✅
 
-Use `employeeRepository.save(...)` for create instead of JDBC DAO.
+`create` uses `employeeRepository.save(entity)`. No id set before save.
+
+After INSERT, the generated id is available on the returned/managed entity (DB generates it; Hibernate sets it on the entity — usually from the insert’s generated key, not a separate full fetch).
+
+---
+
+# Day 14 Experiment 9 — Delete + update via repository 🚧 NEXT
+
+Finish basic CRUD on JPA:
+
+- delete → `deleteById` / `delete`
+- update name → load entity, set name, `save` (or equivalent)
+
 
 
 
