@@ -2,6 +2,8 @@ package com.vijendra.entity;
 
 import java.math.BigDecimal;
 
+import com.vijendra.model.Employee;
+
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -61,5 +63,13 @@ public class EmployeeEntity {
 
     public void setSalary(BigDecimal salary) {
         this.salary = salary;
+    }
+
+    public Employee toEmployee() {
+        Employee employee = new Employee(name, email);
+        employee.setDepartment(department);
+        employee.setSalary(salary);
+        employee.setId(id);
+        return employee;
     }
 }
