@@ -2956,7 +2956,163 @@ Day 14 intro = **DONE**
 
 ---
 
-# Day 14 — God-Level Notes (Notebook)
+# Day 15 Experiment 6 — Bridge to Spring Data JPA ✅
+
+`repository.save()` / `findById()` / `deleteById()` are convenience wrappers over `EntityManager` (see Day 14 notes rewrite).
+
+---
+
+# Day 15 — God-Level Notes (Notebook)
+
+## Stack (bottom → top)
+
+```text
+EntityManager API        ← what you call in JPA code
+Persistence context      ← tracker (managed objects, dirty checking, identity map)
+Hibernate                ← JPA implementation (generates SQL)
+JDBC / DataSource        ← MySQL
+```
+
+**ORM** = work with objects; framework generates SQL + maps rows ↔ objects + tracks changes.
+
+You still own: mapping rules, business logic, special queries.
+
+---
+
+## Persistence context
+
+**Persistence context (PC)** = JPA's working memory inside a transaction.
+
+Jobs:
+
+- track which Java objects = which DB rows
+- watch entity state (new / changed / deleted)
+- flush SQL at the right time (flush / commit)
+- identity map: same id in same PC → often **same Java instance**
+
+PC exists inside a **transaction boundary**. No stable PC for writes without `@Transactional`.
+
+Changing a plain Java object (JDBC style) does **not** hit the DB until you write SQL yourself.
+
+---
+
+## EntityManager vs EntityManagerFactory
+
+| | Role | Analogy |
+|---|------|---------|
+| **EntityManagerFactory (EMF)** | expensive; one per app; reads config + entities | `DataSource` |
+| **EntityManager (EM)** | unit of work; per transaction | `Connection` |
+
+Boot creates EMF at startup (`Initialized JPA EntityManagerFactory`).
+
+Inject `EntityManager` via constructor (preferred) or `@PersistenceContext`. Spring gives a **transaction-scoped proxy**.
+
+`@Transactional` opens the transaction + binds PC. Injection gives you the **handle** to call `persist` / `find`. You need **both**.
+
+---
+
+## Four entity states
+
+| State | Meaning | Example |
+|-------|---------|---------|
+| **transient** | new object; JPA does not know it; no row | `new EmployeeEntity()` |
+| **managed** | inside PC; tied to a row; changes can sync | `em.find()` inside `@Transactional` |
+| **detached** | was managed; tx ended; PC closed | hold reference after service method returns |
+| **removed** | marked for DELETE on flush/commit | `em.remove(managed)` |
+
+Interview lines:
+
+- **managed** + `setName()` → UPDATE at flush/commit (dirty checking). No explicit `save`.
+- **detached** + `setName()` → Java only. DB unchanged until `merge` in a new tx.
+
+---
+
+## EntityManager methods
+
+| Method | For | Effect |
+|--------|-----|--------|
+| `persist(e)` | **transient** only | → managed → INSERT on flush |
+| `find(Class, id)` | load by PK | → managed (or null) |
+| `merge(e)` | **detached** (or untracked) | copy into PC → managed → UPDATE (or INSERT) |
+| `remove(e)` | **managed** | → removed → DELETE on flush |
+| `flush()` | force SQL now | still inside same transaction |
+
+Rules:
+
+- `persist(detached)` → wrong / error
+- `merge()` returns **managed copy** — use return value for further changes
+- `merge(transient)` can work; `persist` is correct for new entities
+
+---
+
+## Dirty checking
+
+Hibernate compares managed entity vs snapshot taken when it entered the PC.
+
+Change a field on a **managed** entity → marked dirty → SQL at **flush** time (explicit `flush()` or automatic flush before commit).
+
+Not instant on every setter. No SQL until flush/commit.
+
+`repository.save(managedEntity)` in Spring Data triggers the same dirty-check + flush path.
+
+---
+
+## IDENTITY id generation
+
+`@GeneratedValue(strategy = GenerationType.IDENTITY)` → DB generates id (`AUTO_INCREMENT`).
+
+Hibernate often runs **INSERT immediately on `persist()`** to read generated key → id available **before** explicit `flush()`.
+
+Do not assume all strategies behave this way (SEQUENCE/TABLE can differ).
+
+---
+
+## `@Transactional` — Spring vs Jakarta
+
+| | Use in Spring Boot + JPA? |
+|---|---------------------------|
+| `org.springframework.transaction.annotation.Transactional` | **Yes — always** |
+| `jakarta.transaction.Transactional` | Avoid — JTA-style; weaker JPA flush-on-commit integration |
+
+Observed bug: Jakarta annotation → INSERT worked (IDENTITY early flush) but commit-time UPDATE from dirty checking did not. Spring's annotation fixed it.
+
+`@Transactional` on **service** layer. Not controller.
+
+---
+
+## CommandLineRunner (learning tool)
+
+`CommandLineRunner.run(args)` called **once after** full startup (context + Tomcat ready).
+
+Use for: seed data, one-time scripts, **JPA learning demos**.
+
+Not for: REST APIs or per-request work.
+
+Full DI works — call `@Transactional` service methods from runner.
+
+`@Profile("learning")` optional — avoid delete/seed on every prod boot.
+
+`ApplicationRunner` = same timing, parsed CLI args (`--id=5`).
+
+---
+
+## Mental model
+
+```text
+@Service @Transactional
+↓
+EntityManager (proxy)
+↓
+Persistence context (per transaction)
+↓
+Hibernate → SQL
+↓
+MySQL
+```
+
+---
+
+# Day 14 — God-Level Notes (Notebook) — rewritten after Day 15
 
 ## Why ORM
 
@@ -2964,32 +3120,33 @@ With JDBC / `JdbcTemplate` DAO:
 
 - **you** write SQL
 - **you** map `ResultSet` → Java object
+- **you** track what changed and when to UPDATE
 
-**ORM (Object-Relational Mapping)** = map Java objects ↔ database rows.
+**ORM** = map Java objects ↔ database rows. Framework generates common SQL, maps rows ↔ objects, tracks changes via persistence context.
 
-For common CRUD, the ORM generates SQL and maps rows ↔ objects.
-
-You still own: mapping rules (class/fields ↔ table/columns), business logic, special queries when defaults are not enough.
+You still own: mapping rules, business logic, special queries.
 
 ---
 
-## Three names
+## Three names (same stack, different layer)
 
 ```text
-Spring Data JPA  → convenience (repository: save, findById, …)
+Spring Data JPA  → convenience (repository methods)
         ↓
-JPA              → specification / API (entity rules)
+EntityManager    → JPA API (persist, find, merge, remove)
+        ↓
+Persistence context → tracker behind EntityManager
         ↓
 Hibernate        → implementation / engine (default in Boot)
         ↓
 JDBC / DataSource / Hikari → MySQL
 ```
 
-- **JPA** = rulebook, not a DB driver.
-- **Hibernate** = product that follows the rulebook.
-- **Spring Data JPA** = Spring layer so you rarely need `EntityManager` at the start.
+- **JPA** = specification / API. Not a DB driver.
+- **Hibernate** = engine that implements JPA.
+- **Spring Data JPA** = generates repository proxy so you rarely write `EntityManager` calls for basic CRUD.
 
-`EntityManager` = lower-level JPA API. Skip for basic CRUD; use repositories first.
+Day 15 = what happens **under** the repository.
 
 ---
 
@@ -3001,12 +3158,12 @@ JDBC / DataSource / Hikari → MySQL
 @Entity
 @Table(name = "employees")
 @Id
-@GeneratedValue(strategy = GenerationType.IDENTITY)  // MySQL auto id
+@GeneratedValue(strategy = GenerationType.IDENTITY)
 ```
 
-Needs a **no-arg constructor** (default is fine if you add no other constructor).
+Needs **no-arg constructor** (Java default is fine if no other constructor).
 
-Do **not** use the entity as `@RequestBody`. Keep DTOs at the controller (Day 13). Entity stays at persistence.
+Entity at **persistence layer only**. Do not use as `@RequestBody` — keep DTOs at controller (Day 13).
 
 ---
 
@@ -3016,35 +3173,47 @@ Do **not** use the entity as `@RequestBody`. Keep DTOs at the controller (Day 13
 public interface EmployeeRepository extends JpaRepository<EmployeeEntity, Integer> {}
 ```
 
-- First type = entity
-- Second = id type (`Integer` for `int` id)
+- First type = entity class
+- Second type = id type (`Integer` for `int` id)
 
-Empty interface is enough for basic CRUD.
+Spring Data scans `JpaRepository` interfaces → creates **proxy bean**. No `@Component` on interface.
 
-Spring Data **scans** interfaces extending `JpaRepository`, creates a **proxy bean**. No `@Component` required on the interface.
+Inherited: `save`, `findById`, `findAll`, `deleteById`, …
 
-Inherited methods include: `save`, `findById`, `findAll`, `deleteById`.
+---
+
+## Repository method → EntityManager (bridge)
+
+| Repository | Under the hood (conceptually) |
+|------------|-------------------------------|
+| `save(newEntity)` (no id) | `persist` → INSERT |
+| `save(detachedEntity)` (has id, tx ended) | `merge` → UPDATE |
+| `save(managedEntity)` (changed in same tx) | dirty checking → UPDATE on flush |
+| `findById(id)` | `em.find` → managed (inside tx) or detached (after tx) |
+| `findAll()` | SELECT all |
+| `deleteById(id)` | load + `remove` or direct DELETE (implementation detail) |
+
+`save()` is **not** always INSERT. Spring Data checks entity state: new → persist, existing/detached → merge.
+
+That is why Day 15 matters before trusting `save()` blindly.
 
 ---
 
 ## CRUD we practiced
 
-| Action | Call |
-|--------|------|
-| List | `findAll()` |
-| Get one | `findById(id)` → `Optional` |
-| Create | `save(newEntity)` without setting id |
-| Update field | `findById` → set field → `save` |
-| Delete | `deleteById(id)` |
+| Action | Call | Note |
+|--------|------|------|
+| List | `findAll()` | |
+| Get one | `findById(id)` → `Optional` | empty ≠ JDBC `EmptyResultDataAccessException` |
+| Create | `save(newEntity)` without id | INSERT; id from DB (`IDENTITY`) |
+| Update field | `findById` → set field → `save` | load first; partial update safe. Same as managed dirty check. |
+| Delete | `deleteById(id)` | check exists first if you need clear **404** |
 
-`findById` returns **`Optional`**. Empty ≠ JDBC’s `EmptyResultDataAccessException`.  
-Handle empty → throw (e.g. `NoSuchElementException`) → web handler → **404**.
+`findById` empty → throw `NoSuchElementException` → `GlobalExceptionHandler` → **404**.
 
-Partial update: **load first**, then change fields. A new entity with only id+name can wipe other columns to null.
+Partial update trap: new entity with only id+name + `save` can null out other columns. **Always load first.**
 
-After create `save`, DB generates id (`IDENTITY`); Hibernate sets it on the entity (usually from insert generated key).
-
-`spring.jpa.show-sql=true` shows Hibernate SQL in the log.
+`spring.jpa.show-sql=true` → Hibernate SQL in logs.
 
 ---
 
@@ -3053,28 +3222,38 @@ After create `save`, DB generates id (`IDENTITY`); Hibernate sets it on the enti
 ```text
 Controller (DTO)
 ↓
-Service (domain Employee + map to/from entity)
+Service (@Transactional, domain Employee, map ↔ entity)
 ↓
 EmployeeRepository (Spring Data proxy)
 ↓
-Hibernate / JPA
+EntityManager + persistence context
 ↓
-MySQL table employees
+Hibernate → SQL
+↓
+MySQL employees
 ```
 
-JDBC DAO can remain in the project for learning. Main API path can use JPA.
+JDBC DAO can stay in project for comparison. Main API path uses JPA.
 
 ---
 
-# Day 15 — JPA from scratch (EntityManager) 🚧 IN PROGRESS
+## Starter + startup signals
 
-## Important
+`spring-boot-starter-data-jpa` wires JPA + Hibernate + Spring Data.
 
-Day 14 Spring Data JPA notes stay in this file unchanged.
+Logs to recognize:
 
-For Day 15 teaching: **assume Spring Data JPA is unknown**. Build a solid ORM/JPA foundation for interviews using JPA API directly (`EntityManager`, persistence context, entity states).
+```text
+Bootstrapping Spring Data JPA repositories
+Found N JPA repository interfaces
+Initialized JPA EntityManagerFactory
+```
 
-Do not delete `EmployeeRepository` from the project; we may use a parallel learning path or temporary experiments so Day 14 code can remain.
+`spring.jpa.open-in-view=true` (Boot default) — keeps session open through web render for lazy loading. Park for later; can cause extra queries.
+
+---
+
+# Day 15 — CommandLineRunner (learned alongside Exp 5)
 
 ## Day 15 Objective
 
@@ -3089,30 +3268,14 @@ Basic operations: persist, find, merge, remove
 ↓
 Transactions with JPA
 ↓
-(How Spring Data sits on top — only at the end, as a bridge)
+Bridge: how Spring Data JPA sits on top (see Day 14 notes rewrite)
 ```
 
-Core question:
+Core question answered:
 
 > **What does JPA actually do underneath a repository, and what are entity states?**
 
-In scope:
-
-- Persistence unit / EntityManagerFactory / EntityManager (simple mental model)
-- Persistence context
-- Entity states
-- `persist`, `find`, `remove`, `merge` (basics)
-- Why `@Transactional` matters with JPA
-- Interview-ready mental models
-- From scratch; challenge before code
-
-Out of scope at the start:
-
-- Restarting all of Spring Data CRUD
-- Advanced JPQL dump on day one
-- Removing Day 14 notes or repository from the knowledge file
-
-Jira ticket created.
+Jira ticket created. All experiments done.
 
 ---
 
@@ -3170,7 +3333,87 @@ Key interview line: **managed + change field = JPA can auto-UPDATE at flush. Det
 
 ---
 
-# Day 15 Experiment 5 — remove + merge 🚧 NEXT
+# Day 15 Experiment 5 — remove + merge ✅
+
+- `removeDemo`: `find` → `remove` → DELETE on commit
+- `mergeDemo`: detached + `setName` → no SQL; `merge` + commit → UPDATE
+- Demos wired via `CommandLineRunner` (`JpaLearningRunner`) instead of HTTP routes
+
+**merge lock-in:** use **return value** of `merge()` for further changes — not the old detached reference.
+
+---
+
+# Day 15 Experiment 6 — Bridge to Spring Data JPA ✅
+
+- Interface: `run(String... args)` called **once after** full ApplicationContext + Tomcat startup
+- Use: startup scripts, seed data, **learning demos** — not for request handling
+- Full DI works; call `@Transactional` service methods from runner (proxy still applies)
+- `@Profile("learning")` optional — avoids delete/seed logic on every prod boot
+- Alternative: `ApplicationRunner` when you need parsed CLI flags (`--id=5`)
+
+---
+
+# Day 16 — JPA Relationships 🚧 IN PROGRESS
+
+## Day 16 Objective
+
+Connect:
+
+```text
+Day 15 — Entity, EntityManager, entity states, persistence context
+        ↓
+Day 16 — JPA relationships (@ManyToOne, @OneToMany, lazy/eager)
+```
+
+Core question:
+
+> **How do you model real-world links between tables (employee ↔ department) in JPA, and what happens when you load one side?**
+
+In scope:
+
+- WHY relationships (stop duplicating department string on every employee row)
+- `@ManyToOne` / `@OneToMany` basics
+- Owning side vs inverse side
+- `mappedBy`
+- `FetchType.LAZY` vs `EAGER` (mental model + `LazyInitializationException` preview)
+- Practical experiment: `Department` entity + link to `EmployeeEntity`
+- Cascade basics (what to park vs cover lightly)
+
+Out of scope (later days):
+
+- `@ManyToMany`
+- Full `open-in-view` day (Day 19 in sequence — option 4)
+- Bidirectional sync deep dive / orphanRemoval advanced cases
+
+Jira ticket created.
+
+---
+
+# Day 16 Experiment 1 — WHY relationships? ✅
+
+Answers (refined):
+
+1. String column **works for tiny demos** but breaks at scale: duplicate data, typos (`IT` vs `it`), rename = update many rows, no single place for department metadata (location, manager).
+2. **Foreign key** = DB enforces a link to one real `departments` row. One source of truth. Invalid department id rejected. Rename department = update **one** row.
+3. **Many employees → one department.** Employee = many side. Department = one side.
+4. **`@ManyToOne` on Employee is enough** to get `employee.getDepartment().getName()`. `@OneToMany` on Department only needed if you also want `department.getEmployees()` from the other side.
+
+---
+
+# Day 16 Experiment 2 — Department entity + @ManyToOne ✅
+
+- `DepartmentEntity` + `employees.department_id` FK
+- `EmployeeEntity`: `@ManyToOne` + `@JoinColumn(name = "department_id")`
+- `getEmployee(9)` → printed department name (`IT`)
+- SQL: **one** query with `LEFT JOIN departments` (default `@ManyToOne` = **EAGER**)
+
+---
+
+# Day 16 Experiment 3 — LAZY vs EAGER 🚧 NEXT
+
+Change `@ManyToOne` to `FetchType.LAZY`. Observe SQL + what breaks when department accessed outside tx.
+
+---
 
 
 
