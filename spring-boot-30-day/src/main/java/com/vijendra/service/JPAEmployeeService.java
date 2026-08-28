@@ -27,6 +27,12 @@ public class JPAEmployeeService {
         return employeeEntity;
     }
 
+    @Transactional
+    public String getDepartment(int employeeId) {
+        EmployeeEntity employeeEntity = this.entityManager.find(EmployeeEntity.class, employeeId);
+        return employeeEntity.getDepartment().getName();
+    }
+
     // @Transactional
     // public Employee persistAndFind(Employee employee) {
     //     EmployeeEntity employeeEntity = new EmployeeEntity();

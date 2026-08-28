@@ -29,8 +29,12 @@ public class JpaLearningRunner implements CommandLineRunner{
         
         // this.jpaEmployeeService.removeDemo();
         
-        EmployeeEntity employeeEntity = jpaEmployeeService.getEmployee(9);
-        System.out.println(employeeEntity.getDepartment().getName());
+        // EmployeeEntity employeeEntity = jpaEmployeeService.getEmployee(9);
+        // System.out.println(employeeEntity.getDepartment().getName()); // it thrown exception
+
+        System.out.println("Department Name : " + this.jpaEmployeeService.getDepartment(9));
+
+
 
         System.out.println("=== JPA Learning Runner end ===");
     }
