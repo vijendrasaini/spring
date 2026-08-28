@@ -3409,9 +3409,17 @@ Answers (refined):
 
 ---
 
-# Day 16 Experiment 3 — LAZY vs EAGER 🚧 NEXT
+# Day 16 Experiment 3 — LAZY vs EAGER ✅
 
-Change `@ManyToOne` to `FetchType.LAZY`. Observe SQL + what breaks when department accessed outside tx.
+Run A (LAZY, access outside tx): employee SELECT only → `LazyInitializationException`
+Run B (LAZY, access inside `@Transactional`): 2 SELECTs (employee, then department) → OK
+Run C (EAGER): 1 SELECT with LEFT JOIN → OK, no second query
+
+Rule: prefer `@ManyToOne(fetch = LAZY)`; load association inside tx or map before return.
+
+---
+
+# Day 16 Experiment 4 — @OneToMany + mappedBy (owning vs inverse) 🚧 NEXT
 
 ---
 
