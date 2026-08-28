@@ -1520,8 +1520,10 @@ Do NOT restart:
 - `@NotBlank` `@Size` `@Email` `@Pattern` / field error map
 - Request/Response DTO vs domain model
 - `ResponseEntity` / 201 / 204
+- JPA vs Hibernate vs Spring Data JPA
+- `@Entity` / `JpaRepository` / `Optional` findById / `save`
 
-Do NOT dump Day 14 theory at once.
+Do NOT dump Day 15 theory at once.
 
 Do NOT start the next day until God-Level notebook notes for the finished day are written.
 
@@ -2784,7 +2786,7 @@ Inside:    Employee + Service + DAO
 
 ---
 
-# Day 14 — Spring Data JPA Intro 🚧 IN PROGRESS
+# Day 14 — Spring Data JPA Intro ✅
 
 ## Day 14 Objective
 
@@ -2927,12 +2929,250 @@ After INSERT, the generated id is available on the returned/managed entity (DB g
 
 ---
 
-# Day 14 Experiment 9 — Delete + update via repository 🚧 NEXT
+# Day 14 Experiment 9 — Delete + update via repository ✅
 
-Finish basic CRUD on JPA:
+Update: find → setName → save (partial update without wiping other columns).
 
-- delete → `deleteById` / `delete`
-- update name → load entity, set name, `save` (or equivalent)
+Delete: `deleteById`. Prefer also checking exists / find first if you want a clear **404** when id is missing (behavior of delete-on-missing can vary by Spring Data version).
+
+---
+
+# Day 14 CURRENT POSITION — INTRO CRUD DONE ✅
+
+From scratch covered:
+
+- ORM WHY ✅
+- JPA vs Hibernate vs Spring Data ✅
+- starter + entity + repository ✅
+- findAll / findById / save / update / delete ✅
+- Optional → 404 ✅
+- DTO at controller; entity at persistence ✅
+
+Ready for day review → God-level notes → Jira Done.
+
+(Later days: relationships, derived query methods, EntityManager, open-in-view, etc.)
+
+Day 14 intro = **DONE**
+
+---
+
+# Day 14 — God-Level Notes (Notebook)
+
+## Why ORM
+
+With JDBC / `JdbcTemplate` DAO:
+
+- **you** write SQL
+- **you** map `ResultSet` → Java object
+
+**ORM (Object-Relational Mapping)** = map Java objects ↔ database rows.
+
+For common CRUD, the ORM generates SQL and maps rows ↔ objects.
+
+You still own: mapping rules (class/fields ↔ table/columns), business logic, special queries when defaults are not enough.
+
+---
+
+## Three names
+
+```text
+Spring Data JPA  → convenience (repository: save, findById, …)
+        ↓
+JPA              → specification / API (entity rules)
+        ↓
+Hibernate        → implementation / engine (default in Boot)
+        ↓
+JDBC / DataSource / Hikari → MySQL
+```
+
+- **JPA** = rulebook, not a DB driver.
+- **Hibernate** = product that follows the rulebook.
+- **Spring Data JPA** = Spring layer so you rarely need `EntityManager` at the start.
+
+`EntityManager` = lower-level JPA API. Skip for basic CRUD; use repositories first.
+
+---
+
+## Entity
+
+**Entity** = Java class mapped to a table. Object ≈ row. Field ≈ column.
+
+```text
+@Entity
+@Table(name = "employees")
+@Id
+@GeneratedValue(strategy = GenerationType.IDENTITY)  // MySQL auto id
+```
+
+Needs a **no-arg constructor** (default is fine if you add no other constructor).
+
+Do **not** use the entity as `@RequestBody`. Keep DTOs at the controller (Day 13). Entity stays at persistence.
+
+---
+
+## Repository
+
+```java
+public interface EmployeeRepository extends JpaRepository<EmployeeEntity, Integer> {}
+```
+
+- First type = entity
+- Second = id type (`Integer` for `int` id)
+
+Empty interface is enough for basic CRUD.
+
+Spring Data **scans** interfaces extending `JpaRepository`, creates a **proxy bean**. No `@Component` required on the interface.
+
+Inherited methods include: `save`, `findById`, `findAll`, `deleteById`.
+
+---
+
+## CRUD we practiced
+
+| Action | Call |
+|--------|------|
+| List | `findAll()` |
+| Get one | `findById(id)` → `Optional` |
+| Create | `save(newEntity)` without setting id |
+| Update field | `findById` → set field → `save` |
+| Delete | `deleteById(id)` |
+
+`findById` returns **`Optional`**. Empty ≠ JDBC’s `EmptyResultDataAccessException`.  
+Handle empty → throw (e.g. `NoSuchElementException`) → web handler → **404**.
+
+Partial update: **load first**, then change fields. A new entity with only id+name can wipe other columns to null.
+
+After create `save`, DB generates id (`IDENTITY`); Hibernate sets it on the entity (usually from insert generated key).
+
+`spring.jpa.show-sql=true` shows Hibernate SQL in the log.
+
+---
+
+## Mental model
+
+```text
+Controller (DTO)
+↓
+Service (domain Employee + map to/from entity)
+↓
+EmployeeRepository (Spring Data proxy)
+↓
+Hibernate / JPA
+↓
+MySQL table employees
+```
+
+JDBC DAO can remain in the project for learning. Main API path can use JPA.
+
+---
+
+# Day 15 — JPA from scratch (EntityManager) 🚧 IN PROGRESS
+
+## Important
+
+Day 14 Spring Data JPA notes stay in this file unchanged.
+
+For Day 15 teaching: **assume Spring Data JPA is unknown**. Build a solid ORM/JPA foundation for interviews using JPA API directly (`EntityManager`, persistence context, entity states).
+
+Do not delete `EmployeeRepository` from the project; we may use a parallel learning path or temporary experiments so Day 14 code can remain.
+
+## Day 15 Objective
+
+```text
+ORM idea
+↓
+JPA concepts (EntityManager, persistence context)
+↓
+Entity lifecycle (transient / managed / detached / removed)
+↓
+Basic operations: persist, find, merge, remove
+↓
+Transactions with JPA
+↓
+(How Spring Data sits on top — only at the end, as a bridge)
+```
+
+Core question:
+
+> **What does JPA actually do underneath a repository, and what are entity states?**
+
+In scope:
+
+- Persistence unit / EntityManagerFactory / EntityManager (simple mental model)
+- Persistence context
+- Entity states
+- `persist`, `find`, `remove`, `merge` (basics)
+- Why `@Transactional` matters with JPA
+- Interview-ready mental models
+- From scratch; challenge before code
+
+Out of scope at the start:
+
+- Restarting all of Spring Data CRUD
+- Advanced JPQL dump on day one
+- Removing Day 14 notes or repository from the knowledge file
+
+Jira ticket created.
+
+---
+
+# Day 15 Experiment 1 — WHY persistence context? ✅
+
+Answers (refined):
+
+1. **No.** After `setName(...)` on a JDBC-loaded object, the DB is unchanged. You must run `UPDATE` (or similar) yourself. Changing the Java object does not touch the database.
+2. **One SELECT is enough** in the same transaction. The persistence context can return the **same managed instance** for the same id (identity map). Avoids duplicate queries and keeps one in-memory truth for that row.
+3. **Persistence context should:** track which Java objects represent DB rows, watch their state (new/changed/deleted), and flush SQL at the right time (usually commit/flush). **Should not:** replace `@Transactional`, guess business rules, or keep objects "live" forever across transactions without `merge`.
+4. **ORM saves you from:** hand-written repetitive SQL for map row↔object, INSERT/UPDATE column lists, and manual change tracking — not just "mapping" in the abstract.
+
+---
+
+# Day 15 Experiment 2 — Entity states (mental model) ✅
+
+- A → **transient** (plain `new`, JPA does not track it)
+- B → **managed** (`em.find` inside active persistence context / transaction)
+- C → **managed** (dirty checking — no explicit `save` needed; change syncs at flush/commit)
+- D → **detached** (transaction ended; context closed; object still in memory but untracked)
+- E → **removed** (scheduled for DELETE on flush/commit)
+
+Key interview line: **managed + change field = JPA can auto-UPDATE at flush. Detached + change field = DB unchanged until `merge`.**
+
+---
+
+# Day 15 — EntityManager mental model (concept) ✅
+
+- **EntityManager** = API you call (`persist`, `find`, `merge`, `remove`)
+- **Persistence context** = tracker behind it (managed objects, dirty checking, identity map)
+- **EMF** = factory (expensive, one per app); **EM** = unit of work (per transaction)
+- PC is scoped to transaction / `EntityManager` session → writes need `@Transactional`
+- **`persist`** → transient only (new row, INSERT)
+- **`merge`** → detached (or untracked) entity → copy into PC → UPDATE (or INSERT if new)
+- `persist(detached)` → wrong / error. `merge(transient)` → can work but `persist` is the right tool for new entities
+- Tx active + `find` → **managed**; tx ended → **detached**; `setName` on detached → **no DB hit** until `merge` in new tx
+
+---
+
+# Day 15 Experiment 3 — First EntityManager (persist + find) ✅
+
+`JPAEmployeeService.persistAndFind`:
+- transient id=0 → `persist` → INSERT runs → id=12 **before** explicit `flush` (IDENTITY strategy)
+- `entity == found` → **true** (same PC / identity map, no second SELECT)
+- `flush()` after INSERT changed nothing (already flushed by `persist` + IDENTITY)
+
+---
+
+# Day 15 Experiment 4 — Dirty checking (managed, no save) ✅
+
+- Managed entity + `setDepartment("HR")` inside tx → should UPDATE at flush/commit (no explicit save)
+- Failed with `jakarta.transaction.Transactional` — INSERT ran (IDENTITY early flush) but commit-time UPDATE did not
+- Fixed with `org.springframework.transaction.annotation.Transactional` — dirty changes flushed on commit
+- Rule: Spring Boot + JPA → always use **Spring's** `@Transactional`, not Jakarta's
+
+---
+
+# Day 15 Experiment 5 — remove + merge 🚧 NEXT
+
+
 
 
 

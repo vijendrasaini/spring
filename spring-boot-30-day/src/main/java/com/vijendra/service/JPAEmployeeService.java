@@ -1,12 +1,12 @@
 package com.vijendra.service;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.vijendra.entity.EmployeeEntity;
 import com.vijendra.model.Employee;
 
 import jakarta.persistence.EntityManager;
-import jakarta.transaction.Transactional;
 
 @Service
 public class JPAEmployeeService {
