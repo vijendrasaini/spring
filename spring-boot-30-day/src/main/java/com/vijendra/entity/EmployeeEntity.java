@@ -8,6 +8,8 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
 @Entity
@@ -21,7 +23,9 @@ public class EmployeeEntity {
 
     private String email;
 
-    private String department;
+    @ManyToOne
+    @JoinColumn(name = "department_id")
+    private DepartmentEntity department;
 
     private BigDecimal salary;
 
@@ -37,7 +41,7 @@ public class EmployeeEntity {
         return email;
     }
 
-    public String getDepartment() {
+    public DepartmentEntity getDepartment() {
         return department;
     }
 
@@ -57,7 +61,7 @@ public class EmployeeEntity {
         this.email = email;
     }
 
-    public void setDepartment(String department) {
+    public void setDepartment(DepartmentEntity department) {
         this.department = department;
     }
 
@@ -67,7 +71,7 @@ public class EmployeeEntity {
 
     public Employee toEmployee() {
         Employee employee = new Employee(name, email);
-        employee.setDepartment(department);
+        employee.setDepartment(department == null ? "" : department.getName());
         employee.setSalary(salary);
         employee.setId(id);
         return employee;

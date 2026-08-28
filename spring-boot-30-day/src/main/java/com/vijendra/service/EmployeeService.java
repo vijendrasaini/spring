@@ -35,7 +35,7 @@ public class EmployeeService {
         EmployeeEntity employeeEntity = new EmployeeEntity();
         employeeEntity.setName(employee.getName());
         employeeEntity.setEmail(employee.getEmail());
-        employeeEntity.setDepartment(employee.getDepartment());
+        // employeeEntity.setDepartment(employee.getDepartment());
         employeeEntity.setSalary(employee.getSalary());
 
         employeeEntity = employeeRepository.save(employeeEntity);
@@ -114,7 +114,7 @@ public class EmployeeService {
 
     private Employee toEmployee(EmployeeEntity employeeEntity) {
         Employee employee = new Employee(employeeEntity.getName(), employeeEntity.getEmail());
-        employee.setDepartment(employeeEntity.getDepartment());
+        // employee.setDepartment(employeeEntity.getDepartment());
         employee.setSalary(employeeEntity.getSalary());
         employee.setId(employeeEntity.getId());
         return employee;

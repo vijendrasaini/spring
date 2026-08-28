@@ -3,6 +3,7 @@ package com.vijendra.controller;
 import java.math.BigDecimal;
 
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.vijendra.model.Employee;
@@ -10,6 +11,7 @@ import com.vijendra.service.EmployeeService;
 import com.vijendra.service.JPAEmployeeService;
 
 @RestController
+@RequestMapping("/test")
 public class TestController {
     private final EmployeeService employeeService;
     private final JPAEmployeeService jpaEmployeeService;
@@ -19,17 +21,12 @@ public class TestController {
     }
 
     @GetMapping("/")
-    public String index() {
-        return "Day 10 web layer is up";
-    }
-
-    @GetMapping("/test")
     public void test() {
         Employee employee = new Employee("Test", "test@test.in");
         employee.setDepartment("IT");
         employee.setSalary(new BigDecimal("555.55"));
-        employee = this.jpaEmployeeService.persistAndFind(employee);
+        // employee = this.jpaEmployeeService.persistAndFind(employee);
 
-        System.out.println("Here is the employee id : " + employee.getId());
+        // System.out.println("Here is the employee id : " + employee.getId());
     }
 }
