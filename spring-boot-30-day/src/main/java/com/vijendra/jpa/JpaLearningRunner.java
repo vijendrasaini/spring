@@ -60,18 +60,25 @@ public class JpaLearningRunner implements CommandLineRunner{
         // System.out.println("______________________________________");
 
 
-        List<EmployeeEntity> employeeEntities = this.employeeRepository.findByNameContainingIgnoreCase("test");
-        System.out.println("Employees by Department : " + "IT");
-        employeeEntities.stream().forEach(ee -> System.out.println(ee.getName()));
+        // List<EmployeeEntity> employeeEntities = this.employeeRepository.findByNameContainingIgnoreCase("test");
+        // System.out.println("Employees by Department : " + "IT");
+        // employeeEntities.stream().forEach(ee -> System.out.println(ee.getName()));
+        // System.out.println("______________________________________");
+
+        // employeeEntities = this.employeeRepository.findByDepartment_NameAndSalaryGreaterThan("IT", new BigDecimal("200.00"));
+        // employeeEntities.stream().forEach(ee -> System.out.println(ee.getName()));
+        // System.out.println("______________________________________");
+
+        // employeeEntities = this.employeeRepository.findByDepartment_NameOrderBySalaryDesc("IT");
+        // employeeEntities.stream().forEach(ee -> System.out.println(ee.getName()));
+        // System.out.println("______________________________________");
+
+
+        EmployeeEntity employeeEntities = this.employeeRepository.findByEmail("vijendra@gmail.com").get();
+        System.out.println(employeeEntities.getName());
         System.out.println("______________________________________");
 
-        employeeEntities = this.employeeRepository.findByDepartment_NameAndSalaryGreaterThan("IT", new BigDecimal("200.00"));
-        employeeEntities.stream().forEach(ee -> System.out.println(ee.getName()));
-        System.out.println("______________________________________");
-
-        employeeEntities = this.employeeRepository.findByDepartment_NameOrderBySalaryDesc("IT");
-        employeeEntities.stream().forEach(ee -> System.out.println(ee.getName()));
-        System.out.println("______________________________________");
+        System.out.println("FOUND ? " + this.employeeRepository.existsByEmail("vijendra@gmail.com"));
 
         // employeeEntities = this.employeeRepository.findByDep_Name("IT");
         // employeeEntities.stream().forEach(ee -> System.out.println(ee.getName()));

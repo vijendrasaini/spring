@@ -3727,7 +3727,7 @@ employees.department_id  →  departments.id
 
 ---
 
-# Day 17 — Spring Data Query Methods 🚧 IN PROGRESS
+# Day 17 — Spring Data Query Methods ✅ DONE
 
 ## Day 17 Objective
 
@@ -3799,9 +3799,344 @@ Observed:
 
 ---
 
-# Day 17 Experiment 4 — existsBy / Optional return 🚧 NEXT
+# Day 17 Experiment 4 — existsBy / Optional return ✅
 
-Add `existsByEmail`, `findByEmail` → `Optional`. Quick experiment then God-level notes.
+- `findByEmail` → `Optional<EmployeeEntity>` — present or empty
+- `existsByEmail` → `boolean` — efficient existence check (SELECT 1 / count style, not full entity load)
+
+---
+
+# Day 17 — Spring Data Query Methods ✅ DONE
+
+---
+
+# Day 17 — God-Level Notes (Notebook)
+
+## Why derived query methods?
+
+`findAll()` + Java `filter` → loads **every row** into JVM, filters in memory.
+
+Bad at scale: waste memory, network, CPU. DB can't filter early.
+
+**Derived query method** = method name describes the query. Spring Data parses name → Hibernate runs SQL. You write **no SQL/JPQL** for simple cases.
+
+```text
+findByDepartment_Name("IT")
+  → Spring Data parses name
+  → Hibernate generates SQL with WHERE on department.name
+```
+
+---
+
+## Who generates what?
+
+```text
+Method name  →  Spring Data (parse + build query)
+SQL          →  Hibernate (generate + execute)
+```
+
+Not you. Not Hibernate alone from the method name — **both layers**.
+
+---
+
+## Method naming structure
+
+```text
+findBy + Property + Keyword + Property + OrderBy...
+  │        │          │
+  │        │          └── And, Or, Containing, GreaterThan, IgnoreCase, …
+  │        └── entity field (use _ to navigate relationships)
+  └── prefix (find / read / get / query / count / exists)
+```
+
+**Property path** must match **Java field names** on entity — not DB column names.
+
+```text
+findByDepartment_Name     ✅  field department + nested name
+findByDep_Name            ❌  QueryCreationException (no field dep)
+```
+
+Underscore `_` = navigate into associated entity (`department.name`).
+
+---
+
+## Prefixes & return types
+
+| Prefix | Example | Returns |
+|--------|---------|---------|
+| `find…` | `findByName` | `List`, `Optional`, entity |
+| `exists…` | `existsByEmail` | `boolean` |
+| `count…` | `countByDepartment_Name` | `long` |
+
+```java
+Optional<EmployeeEntity> findByEmail(String email);  // 0 or 1 row
+boolean existsByEmail(String email);                 // true/false, lightweight
+List<EmployeeEntity> findByDepartment_Name(...);    // 0..N rows
+```
+
+Use **`existsBy`** for “is email taken?” — avoids loading full entity.
+
+Handle `Optional` with `isEmpty()` / `orElseThrow()` — not bare `.get()` in production.
+
+---
+
+## Keywords we practiced
+
+| Keyword | SQL-ish meaning |
+|---------|-----------------|
+| `And` | `AND` |
+| `Or` | `OR` |
+| `Containing` | `LIKE %value%` |
+| `IgnoreCase` | case-insensitive |
+| `GreaterThan` | `>` |
+| `LessThan` | `<` |
+| `Between` | `BETWEEN` |
+| `IsNull` | `IS NULL` |
+| `OrderByXDesc` / `Asc` | `ORDER BY x DESC/ASC` |
+
+Examples:
+
+```java
+findByNameContainingIgnoreCase("test")
+findByDepartment_NameAndSalaryGreaterThan("IT", salary)
+findByDepartment_NameOrderBySalaryDesc("IT")
+```
+
+---
+
+## Relationship in method name
+
+`findByDepartment_Name("IT")` → SQL JOINs `departments` for **filter**:
+
+```sql
+FROM employees JOIN departments ... WHERE departments.name = ?
+```
+
+JOIN here = **filter**, not necessarily **fetch join** of full department into memory.
+
+---
+
+## EAGER vs LAZY + derived queries (Day 16 link)
+
+| Setup | Print `getName()` only | Also call `getDepartment()` inside tx |
+|-------|------------------------|--------------------------------------|
+| `@ManyToOne(EAGER)` | often **2 queries** (main + dept load) | 2+ |
+| `@ManyToOne(LAZY)` | **1 query** | 2+ (lazy init on touch) |
+
+**EAGER extra query ≠ Spring Data bug.** JOIN in derived query filters; EAGER **hydrates** association separately.
+
+**Production:** `@ManyToOne(LAZY)`. Touch associations inside `@Transactional` service. Return DTO/plain data.
+
+**N+1:** many employees, loop `getDepartment()` → many dept SELECTs. Fix later with `@Query` + `JOIN FETCH` (Day 18).
+
+---
+
+## Mental model
+
+```text
+EmployeeRepository method name
+↓
+Spring Data proxy (parses at startup)
+↓
+JPQL/SQL via Hibernate
+↓
+MySQL
+```
+
+Derived queries for **simple reads**. When method names get too long or you need fetch joins → Day 18 `@Query` / JPQL.
+
+---
+
+## Derived query naming grammar (full rules)
+
+Spring Data parses the **method name** at startup. If it can't parse → `QueryCreationException`.
+
+### Pattern
+
+```text
+[Subject] + By + [Predicate] + [OrderBy]
+```
+
+**Subject** = what operation + optional limit/distinct  
+**Predicate** = conditions on entity properties  
+**OrderBy** = sort (at the end)
+
+### 1. Subject — operation prefix
+
+Must end with **`By`** before the first property.
+
+| Prefix | Meaning | Return type |
+|--------|---------|-------------|
+| `find…By` | select rows | entity, `List`, `Set`, `Optional` |
+| `read…By` | same as find | same |
+| `get…By` | same as find | same |
+| `query…By` | same as find | same |
+| `search…By` | same as find | same |
+| `stream…By` | stream results | `Stream<Entity>` |
+| `count…By` | count rows | `long` |
+| `exists…By` | any row exists? | `boolean` |
+| `delete…By` / `remove…By` | delete matching | `long` (deleted count) or `void` |
+
+Examples:
+
+```java
+List<EmployeeEntity> findByName(String name);
+long countByDepartment_Name(String dept);
+boolean existsByEmail(String email);
+```
+
+### 2. Subject modifiers (optional, before `By`)
+
+| Modifier | Meaning |
+|----------|---------|
+| `Distinct` | SQL `DISTINCT` |
+| `FirstN` / `TopN` | limit to N rows (e.g. `findFirst3By…`, `findTopBy…`) |
+
+```java
+EmployeeEntity findFirstByOrderBySalaryDesc();
+List<EmployeeEntity> findTop3ByDepartment_NameOrderBySalaryDesc(String dept);
+```
+
+### 3. Predicate — property + keyword
+
+**Property** = Java field on entity. Use **`_`** or camelCase to traverse associations:
+
+```java
+findByDepartment_Name(...)   // employee.department.name
+findByDepartmentName(...)    // same path (camelCase)
+findByName(...)                // employee.name
+```
+
+**Keywords** combine with properties. Parameter order = order keywords appear in method name.
+
+#### Equality (no keyword)
+
+```java
+findByName(String name)           // WHERE name = ?
+findByEmailAndDepartment_Name(...) // AND
+findByNameOrEmail(...)             // OR
+```
+
+#### Comparison
+
+| Keyword | SQL |
+|---------|-----|
+| `LessThan` | `<` |
+| `LessThanEqual` | `<=` |
+| `GreaterThan` | `>` |
+| `GreaterThanEqual` | `>=` |
+| `Between` | `BETWEEN` (2 params) |
+| `After` / `Before` | dates |
+| `IsTrue` / `IsFalse` | boolean fields |
+
+```java
+findBySalaryBetween(BigDecimal min, BigDecimal max)
+findBySalaryGreaterThan(BigDecimal min)
+```
+
+#### Null
+
+| Keyword | SQL |
+|---------|-----|
+| `IsNull` | `IS NULL` |
+| `IsNotNull` | `IS NOT NULL` |
+
+```java
+findByDepartmentIsNull()
+```
+
+#### String / Like
+
+| Keyword | SQL-ish |
+|---------|---------|
+| `Like` | `LIKE` (you pass `%` in value) |
+| `NotLike` | `NOT LIKE` |
+| `Containing` | `%value%` |
+| `NotContaining` | not contains |
+| `StartingWith` | `value%` |
+| `EndingWith` | `%value` |
+| `IgnoreCase` | case-insensitive (suffix on string prop) |
+
+```java
+findByNameContainingIgnoreCase("test")
+findByNameStartingWith("Vij")
+```
+
+#### Collection
+
+| Keyword | SQL |
+|---------|-----|
+| `In` | `IN (...)` |
+| `NotIn` | `NOT IN` |
+
+```java
+findByDepartment_NameIn(List<String> names)
+```
+
+#### Combining conditions
+
+```java
+findByDepartment_NameAndSalaryGreaterThan(String dept, BigDecimal min)
+findByNameOrEmail(String name, String email)
+```
+
+`And` / `Or` chain multiple conditions. Property names repeat as needed.
+
+### 4. OrderBy (always at the end)
+
+```java
+findByDepartment_NameOrderBySalaryDesc(String dept)
+findByDepartment_NameOrderByNameAscSalaryDesc(String dept)
+```
+
+Multiple fields: repeat `Asc` / `Desc` per property.
+
+### 5. Return type rules
+
+| Return | When |
+|--------|------|
+| `Optional<Entity>` | expect 0 or 1 row (`findByEmail`) |
+| `Entity` | expect exactly 1 (throws if 0 or many) |
+| `List<Entity>` | 0..N rows |
+| `boolean` | `exists…By` only |
+| `long` | `count…By` |
+| `Page<Entity>` | + `Pageable` param (pagination — later) |
+
+Parameter count must match placeholders implied by method name (`Between` = 2, `And` with 2 props = 2 params, etc.).
+
+### 6. Hard rules (memorize)
+
+1. Property names = **Java entity fields**, not DB columns.
+2. Wrong property → **`QueryCreationException`** at startup.
+3. `_` or camelCase for nested: `Department_Name` / `DepartmentName`.
+4. `OrderBy` always **last** in method name.
+5. Method name unreadably long → use **`@Query`** (Day 18).
+
+### 7. What we did NOT cover in Day 17 (later)
+
+| Topic | When |
+|-------|------|
+| `@Query` / JPQL | **Day 18** |
+| `JOIN FETCH` / N+1 fix | **Day 18** |
+| Native SQL `@Query(nativeQuery=true)` | Day 18+ |
+| `Pageable` / `Page` pagination | Day 17+ optional or with JPQL |
+| Specifications / Criteria | much later |
+| `@EntityGraph` | advanced |
+
+Day 17 = **grammar + common keywords + observe SQL**.  
+Day 18 = **when derived names are not enough**, write JPQL yourself.
+
+---
+
+## Five rules
+
+1. Method name property path = **Java entity fields**, not DB columns.
+2. `_` navigates relationships (`Department_Name`).
+3. Filter happens in **DB**, not `findAll()` + stream filter.
+4. Wrong field name → **`QueryCreationException`** at startup.
+5. **LAZY** on associations; load inside **transactional service**; `existsBy` for boolean checks.
+
+---
 
 
 
