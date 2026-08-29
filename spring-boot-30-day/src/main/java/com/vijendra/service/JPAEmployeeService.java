@@ -5,6 +5,7 @@ import java.util.NoSuchElementException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.vijendra.entity.DepartmentEntity;
 import com.vijendra.entity.EmployeeEntity;
 import com.vijendra.model.Employee;
 
@@ -28,9 +29,19 @@ public class JPAEmployeeService {
     }
 
     @Transactional
-    public String getDepartment(int employeeId) {
+    public String getDepartmentByEmployeeId(int employeeId) {
         EmployeeEntity employeeEntity = this.entityManager.find(EmployeeEntity.class, employeeId);
         return employeeEntity.getDepartment().getName();
+    }
+
+    @Transactional
+    public DepartmentEntity getDepartment(int departmentId) {
+        DepartmentEntity departmentEntity = this.entityManager.find(DepartmentEntity.class, departmentId);
+        if(departmentEntity == null) {
+            throw new NoSuchElementException("Department Not found!");
+        }
+
+        return departmentEntity;
     }
 
     // @Transactional

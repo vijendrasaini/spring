@@ -3,6 +3,7 @@ package com.vijendra.jpa;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
+import com.vijendra.entity.DepartmentEntity;
 import com.vijendra.entity.EmployeeEntity;
 import com.vijendra.model.Employee;
 import com.vijendra.service.JPAEmployeeService;
@@ -32,9 +33,11 @@ public class JpaLearningRunner implements CommandLineRunner{
         // EmployeeEntity employeeEntity = jpaEmployeeService.getEmployee(9);
         // System.out.println(employeeEntity.getDepartment().getName()); // it thrown exception
 
-        System.out.println("Department Name : " + this.jpaEmployeeService.getDepartment(9));
+        // System.out.println("Department Name : " + this.jpaEmployeeService.getDepartment(9));
 
-
+        DepartmentEntity departmentEntity = jpaEmployeeService.getDepartment(1);
+        System.out.println(departmentEntity.getName());
+        System.out.println("Employeed Count : " + departmentEntity.getEmployees().size());
 
         System.out.println("=== JPA Learning Runner end ===");
     }
