@@ -3727,6 +3727,82 @@ employees.department_id  →  departments.id
 
 ---
 
+# Day 17 — Spring Data Query Methods 🚧 IN PROGRESS
+
+## Day 17 Objective
+
+Connect:
+
+```text
+Day 14 — JpaRepository basic CRUD (save, findById, findAll)
+Day 16 — Employee ↔ Department relationship
+        ↓
+Day 17 — Derived query methods (findByX, And, Or, Containing, …)
+```
+
+Core question:
+
+> **How does Spring Data generate SQL from a repository method name, and how do I query by department, name, salary, etc. without writing SQL?**
+
+In scope:
+
+- WHY derived queries (avoid boilerplate for simple reads)
+- Method naming rules (`findBy`, `readBy`, `getBy`, `queryBy`, …)
+- Property traversal (`findByDepartment_Name`)
+- Keywords: `And`, `Or`, `Containing`, `IgnoreCase`, `OrderBy`, `Between`, `IsNull`
+- Return types: `List`, `Optional`, `boolean exists…`
+- Observe generated SQL with `show-sql`
+- Use in `EmployeeService` / optional temp endpoint
+
+Out of scope (Day 18):
+
+- `@Query` / JPQL
+- Native SQL queries
+- Specifications / Criteria API
+
+Do not start experiments until Jira ticket exists.
+
+Jira ticket created.
+
+---
+
+# Day 17 Experiment 1 — WHY derived queries? ✅
+
+Answers (refined):
+
+1. **Correct** — loads all rows, filters in JVM → waste memory/CPU/network; slow at scale.
+2. **Spring Data** parses method name → builds query. **Hibernate** generates/runs SQL. Both layers; not "you write SQL" and not Hibernate alone from method name.
+3. **`Department`** = relationship field on `EmployeeEntity`. **`Name`** = property on `DepartmentEntity`. Underscore `_` = navigate into associated entity (`findByDepartment_Name`).
+4. **`findByName`** → queries **`EmployeeEntity.name`** (employee name). No exception — method name maps to entity property path. Only one `name` on Employee at top level.
+
+---
+
+# Day 17 Experiment 2 — First derived methods ✅
+
+Observed:
+- `findByDepartment_Name("IT")` → query 1: employees JOIN departments (WHERE d.name=?) ✅ filter in DB
+- query 2: `SELECT ... FROM departments WHERE id=?` → **not from method name** — caused by `@ManyToOne(fetch = EAGER)` on `EmployeeEntity.department` hydrating after load
+- `findByName("Test")` → 1 query only (no department load needed if no rows / no eager touch). Empty result = exact match failed — check DB for exact `name` value (not `Vijendra Test`, not trailing space)
+- `findBySalaryGreaterThan` → query 1: employees WHERE salary>? ; query 2: department by id (EAGER again)
+- `findByDep_Name` → `QueryCreationException` — no field `dep` on EmployeeEntity (must match Java property: `department`)
+- EAGER extra query ≠ derived query bug — JOIN in derived query = filter; EAGER hydrates association separately
+- LAZY + only `getName()` → 1 query; LAZY + `getDepartment()` inside tx → 2+ queries (N+1 risk if many employees, same dept may dedupe to 2)
+
+---
+
+# Day 17 Experiment 3 — More keywords (And, Containing, OrderBy) ✅
+
+- `ContainingIgnoreCase` → `UPPER(name) LIKE` → matched Vijendra Test + Test
+- `And` → JOIN + `WHERE dept.name AND salary>` → filtered in DB
+- `OrderBySalaryDesc` → `ORDER BY salary DESC` in SQL (Test → Vijendra Test → Shimbhu for IT)
+- JPA uses `department_id` / relationship — stale string `department` column can lie (id 3 shows HR string but department_id=1)
+
+---
+
+# Day 17 Experiment 4 — existsBy / Optional return 🚧 NEXT
+
+Add `existsByEmail`, `findByEmail` → `Optional`. Quick experiment then God-level notes.
+
 
 
 
