@@ -3353,7 +3353,7 @@ Key interview line: **managed + change field = JPA can auto-UPDATE at flush. Det
 
 ---
 
-# Day 16 — JPA Relationships 🚧 IN PROGRESS
+# Day 16 — JPA Relationships ✅ DONE
 
 ## Day 16 Objective
 
@@ -3419,7 +3419,311 @@ Rule: prefer `@ManyToOne(fetch = LAZY)`; load association inside tx or map befor
 
 ---
 
-# Day 16 Experiment 4 — @OneToMany + mappedBy (owning vs inverse) 🚧 NEXT
+# Day 16 Experiment 4 — @OneToMany + mappedBy ✅
+
+- `@OneToMany(mappedBy = "department")` on Department = **inverse** side (no FK column)
+- `@ManyToOne` + `@JoinColumn` on Employee = **owning** side (`department_id`)
+- LAZY (default `@OneToMany`): dept SELECT → `getEmployees().size()` outside tx → `LazyInitializationException`
+- EAGER `@OneToMany`: one JOIN → count works outside tx but over-fetches
+- Production: keep both sides LAZY; load collections inside `@Transactional` service
+
+---
+
+# Day 16 — God-Level Notes (Notebook)
+
+## What is a JPA relationship?
+
+JPA maps **links between Java objects** to **links between database tables**.
+
+```text
+Java objects  ↔  JPA  ↔  DB tables
+```
+
+Example: many employees belong to one department.
+
+```text
+Employee N ───── 1 Department
+```
+
+---
+
+## WHY not a string column?
+
+Today we had `employees.department = "IT"` (string).
+
+Works for tiny demos. Problems at scale:
+
+| Problem | Example |
+|---------|---------|
+| Duplication | 100 rows all store `"IT"` |
+| Rename pain | change name → UPDATE 100 rows |
+| Typos | `"IT"`, `"it"`, `"I.T."` treated as different |
+| No metadata | `location`, `manager` on department → copy on every employee row |
+
+**Fix:** separate `departments` table + **foreign key** `employees.department_id → departments.id`.
+
+One department row = single source of truth.
+
+---
+
+## Cardinality (how many?)
+
+| Relationship | Meaning |
+|--------------|---------|
+| 1 : 1 | one ↔ one |
+| 1 : N | one → many |
+| N : 1 | many → one |
+| N : N | many ↔ many |
+
+Same link, two views:
+
+```text
+Department 1 ───── N Employee
+
+Department → Employee  = 1:N   (@OneToMany)
+Employee → Department  = N:1   (@ManyToOne)
+```
+
+Day 16 practiced **N:1 / 1:N** only. `@OneToOne` / `@ManyToMany` parked for later.
+
+---
+
+## Four JPA relationship annotations
+
+```text
+@OneToOne
+@OneToMany
+@ManyToOne
+@ManyToMany
+```
+
+Read from **this entity's perspective**:
+
+```java
+@ManyToOne
+DepartmentEntity department;   // many employees → one department
+```
+
+---
+
+## Foreign key (DB view)
+
+```text
+departments          employees
+| id | name |        | id | name | department_id |
+| 1  | IT   |   ←──  | 1  | Vij  | 1             |
+```
+
+`department_id` = FK column. Points to `departments.id`.
+
+JPA `@ManyToOne` + `@JoinColumn` maps this column.
+
+---
+
+## @ManyToOne + @JoinColumn (what we built)
+
+```java
+@ManyToOne(fetch = FetchType.LAZY)
+@JoinColumn(name = "department_id")
+private DepartmentEntity department;
+```
+
+| Piece | Meaning |
+|-------|---------|
+| `@ManyToOne` | many employees → one department |
+| `@JoinColumn(name = "department_id")` | **DB column name** for FK |
+| Java field `department` | object navigation |
+
+**Default fetch for `@ManyToOne` = EAGER** (JPA spec). We set **LAZY** in production style.
+
+---
+
+## Unidirectional vs bidirectional
+
+**Unidirectional** — navigate one way only:
+
+```java
+// Employee has department. Department has NO employees list.
+employee.getDepartment();   // ✅
+department.getEmployees();  // not modeled
+```
+
+**Bidirectional** — navigate both ways:
+
+```java
+employee.getDepartment();   // ✅
+department.getEmployees();  // ✅
+```
+
+**Bidirectional ≠ two DB relationships.** One FK in DB. Two Java navigation paths.
+
+Day 16: started unidirectional (`@ManyToOne` only), then added `@OneToMany` for reverse navigation.
+
+---
+
+## Owning side vs inverse side
+
+For bidirectional FK mapping:
+
+```java
+// OWNING side — controls FK in DB
+@ManyToOne
+@JoinColumn(name = "department_id")
+private DepartmentEntity department;
+
+// INVERSE side — navigation only, no FK column
+@OneToMany(mappedBy = "department")
+private List<EmployeeEntity> employees;
+```
+
+| Side | Role |
+|------|------|
+| **Owning** (`Employee.department`) | defines FK mapping; `employee.setDepartment(dept)` updates `department_id` |
+| **Inverse** (`Department.employees`) | collection view; does not own the column |
+
+Do **not** memorize "@ManyToOne is always owner."  
+Rule: **owning side = side with `@JoinColumn` / FK column.**
+
+Only owning side changes the DB link.
+
+---
+
+## mappedBy
+
+```java
+@OneToMany(mappedBy = "department")
+private List<EmployeeEntity> employees;
+```
+
+`mappedBy = "department"` = Java field name on **EmployeeEntity** that owns the link.
+
+```text
+mappedBy = "department"     ✅ Java field
+mappedBy = "department_id"  ❌ DB column name
+```
+
+Without `mappedBy`, JPA may treat `@OneToMany` and `@ManyToOne` as **two separate mappings**.  
+`mappedBy` tells JPA: **same relationship, two sides.**
+
+---
+
+## mappedBy vs @JoinColumn
+
+| Annotation | Points to |
+|------------|-----------|
+| `@JoinColumn(name = "...")` | **DB column** |
+| `mappedBy = "..."` | **Java field name** on other entity |
+
+---
+
+## Design framework (interview)
+
+For two linked entities, ask in order:
+
+1. **Cardinality** — 1:1, 1:N, N:1, N:N?
+2. **Direction** — one-way navigation or both?
+3. **Ownership** — which side has `@JoinColumn` / FK?
+
+Example (our project):
+
+```text
+Cardinality:  N employees → 1 department
+Direction:    bidirectional (employee → dept, dept → employees)
+Ownership:    Employee.department owns department_id
+```
+
+---
+
+## FetchType — LAZY vs EAGER
+
+**Problem:** when parent loads, also load association now or later?
+
+| | **EAGER** | **LAZY** |
+|---|-----------|----------|
+| **When** | with parent | on first access (`getDepartment()` / `getEmployees()`) |
+| **SQL** | often one JOIN | separate SELECT when touched |
+| **Risk** | over-fetching | `LazyInitializationException` outside tx |
+
+**Defaults (JPA):**
+
+```text
+@ManyToOne   → EAGER (override to LAZY in real apps)
+@OneToMany   → LAZY
+```
+
+### What we observed
+
+**`@ManyToOne` EAGER:** one JOIN query; department available after tx.  
+**`@ManyToOne` LAZY + access in runner after tx:** `LazyInitializationException`.  
+**`@ManyToOne` LAZY + access inside `@Transactional` service:** 2 SELECTs, OK.
+
+**`@OneToMany` LAZY (default) + `getEmployees().size()` in runner:** exception.  
+**`@OneToMany` EAGER:** one JOIN, count works but loads all employees every time.
+
+---
+
+## LazyInitializationException
+
+Happens when you touch a **LAZY** association after persistence context is closed (transaction ended).
+
+```text
+@Transactional service → find entity → return entity
+tx ends → PC closed
+runner/controller → entity.getDepartment()  → CRASH
+```
+
+Entity is **detached** (or proxy has no session). Hibernate cannot run lazy SELECT.
+
+---
+
+## Standard fix (production pattern)
+
+Keep associations **LAZY**. Touch them **inside `@Transactional` service**. Return plain data (String, int, DTO) — not raw entity with lazy proxies to controller/runner.
+
+```java
+@Transactional
+public int getEmployeeCount(int departmentId) {
+    DepartmentEntity dept = entityManager.find(DepartmentEntity.class, departmentId);
+    return dept.getEmployees().size();   // lazy load inside tx → OK
+}
+```
+
+```text
+Controller / Runner  →  no lazy loading
+@Service @Transactional  →  lazy load here
+Return DTO / int / String  →  safe outside tx
+```
+
+This is the **standard Spring + JPA way** — not a workaround.
+
+Do **not** switch to EAGER just to fix runner/controller exceptions.
+
+---
+
+## Mental model (full stack)
+
+```text
+Controller (DTO)
+↓
+@Service @Transactional
+↓
+EmployeeEntity  @ManyToOne(LAZY)  →  DepartmentEntity
+DepartmentEntity  @OneToMany(mappedBy, LAZY)  →  List<EmployeeEntity>
+↓
+EntityManager + persistence context (per tx)
+↓
+employees.department_id  →  departments.id
+```
+
+---
+
+## Five rules to remember
+
+1. **Cardinality** = what the relationship is (1:N, N:1, …).
+2. **Direction** = which way Java can navigate (uni vs bidirectional).
+3. **Ownership** = which side has `@JoinColumn` / FK; only that side updates DB link.
+4. **`mappedBy`** = Java field name on owner, not DB column.
+5. **Bidirectional** = two Java paths, **one** DB relationship. Prefer **LAZY** + load inside transactional service.
 
 ---
 
