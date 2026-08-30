@@ -4468,7 +4468,61 @@ Return **DTOs / plain models** to controller — not entities with lazy proxies.
 Day 19 = **where the session ends** in a web app.  
 Day 18 + 19 together = **JOIN FETCH in service** + **OSIV off** + **@Transactional reads** = production JPA read pattern.
 
+**readOnly quiz (post-Day 19):** still opens tx/session; don't call save(); lazy fix = `@Transactional` itself, readOnly = optimization hint.
+
 Ready for day review → God-level notes → Jira Done.
+
+---
+
+# Day 20 — Pagination (`Pageable`) 🚧 IN PROGRESS
+
+## Day 20 Objective
+
+Connect:
+
+```text
+Day 17 — derived queries return List (all matching rows)
+Day 19 — @Transactional read + OSIV off
+        ↓
+Day 20 — Pageable / Page — fetch one page at a time from DB
+```
+
+Core question:
+
+> **How do I return employees page-by-page instead of loading the entire table with `findAll()`?**
+
+In scope:
+
+- WHY pagination (memory, network, UX, N+1 on lists)
+- `Pageable`, `PageRequest.of(page, size, sort)`
+- `Page<T>` vs `List<T>` — content + metadata (`totalElements`, `totalPages`, …)
+- Controller query params: `?page=0&size=10&sort=salary,desc`
+- `@Transactional(readOnly = true)` on paginated read service
+- Observe SQL: `LIMIT` / `OFFSET` (MySQL)
+
+Out of scope (later):
+
+- Keyset / cursor pagination
+- `Slice` vs `Page` deep dive (mention only)
+- `@EntityGraph` / native SQL
+
+Do not start experiments until Jira ticket exists.
+
+Jira ticket: _(pending)_
+
+---
+
+# Day 20 Experiment 1 — WHY pagination? ✅ DONE
+
+- Q1: findAll() at scale → memory, network, slow API, JVM pressure, N+1 risk on lists. ✅
+- Q2: SQL uses LIMIT/OFFSET; Spring HTTP params = `page`, `size`, `sort` (page is 0-based). Refined.
+- Q3: Page metadata = totalElements, totalPages, number, size, first/last, etc. — not "offset" in API. Refined.
+
+# Day 20 Experiment 2 — first Pageable in repository/service 🚧 NEXT
+
+Pagination fundamentals taught first (user request): Pageable, PageRequest, Sort, Page, Slice, JpaRepository methods, controller binding.
+
+Quiz: Pageable=input, Page=output+metadata; Page=2 SQL (count+data); HTTP page+size→LIMIT/OFFSET. ✅
 
 
 
