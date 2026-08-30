@@ -74,14 +74,19 @@ public class JpaLearningRunner implements CommandLineRunner{
         // System.out.println("______________________________________");
 
 
-        EmployeeEntity employeeEntities = this.employeeRepository.findByEmail("vijendra@gmail.com").get();
-        System.out.println(employeeEntities.getName());
-        System.out.println("______________________________________");
+        // EmployeeEntity employeeEntities = this.employeeRepository.findByEmail("vijendra@gmail.com").get();
+        // System.out.println(employeeEntities.getName());
+        // System.out.println("______________________________________");
 
-        System.out.println("FOUND ? " + this.employeeRepository.existsByEmail("vijendra@gmail.com"));
+        // System.out.println("FOUND ? " + this.employeeRepository.existsByEmail("vijendra@gmail.com"));
 
         // employeeEntities = this.employeeRepository.findByDep_Name("IT");
         // employeeEntities.stream().forEach(ee -> System.out.println(ee.getName()));
+
+        // JPQL 
+        List<EmployeeEntity> employeeEntities = this.employeeRepository.findEmployeesByDepartmentNameAndSalaryAbove("IT", new BigDecimal("200.00"));
+        employeeEntities.stream().forEach(ee -> System.out.println("Name : %s, DeptName : %s".formatted(ee.getName(), ee.getDepartment().getName())));
+        System.out.println("______________________________________");
 
         System.out.println("=== JPA Learning Runner end ===");
     }

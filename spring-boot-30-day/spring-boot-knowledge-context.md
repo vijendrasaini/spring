@@ -4064,7 +4064,7 @@ Day 18 = when derived names are not enough.
 
 ---
 
-# Day 18 — JPQL & @Query 🚧 IN PROGRESS
+# Day 18 — JPQL & @Query ✅ DONE
 
 ## Day 18 Objective
 
@@ -4102,9 +4102,182 @@ Jira ticket created.
 
 ---
 
-# Day 18 Experiment 1 — WHY @Query? 🚧 NEXT
+# Day 18 Experiment 1 — WHY @Query? ✅ DONE
 
-Baseline: limits of derived `findBy…` names. No `@Query` code yet.
+- Derived = filter only; JOIN FETCH = load strategy. Cannot replace one with the other.
+- @Query when: naming can't express it (JOIN FETCH, aggregates) OR readability.
+- JPQL = entity class + field names, not table/column names.
+
+# Day 18 Experiment 2 — first @Query + @Param ✅ DONE
+
+- `findEmployeesByDepartmentNameAndSalaryAbove` in EmployeeRepository (text block JPQL).
+- JPQL needs alias (`e`), not SQL `*`.
+- EAGER demo: 2 employees same dept → 1 dept SELECT; 2nd from PC (same `@25c887ca` ref).
+
+# Day 18 Experiment 3 — JOIN FETCH vs N+1 ✅ DONE
+
+- Reverted `@ManyToOne(LAZY)` on `EmployeeEntity.department`.
+- Same `@Query` method upgraded with `JOIN FETCH e.department d`.
+- Observed **1 SQL** — SELECT includes both employee + department columns in one JOIN.
+- Loop `getDepartment().getName()` → **0 extra SELECTs** (N+1 fixed).
+- Compare: derived / plain JPQL JOIN = filter only; EAGER = separate dept SELECT(s); JOIN FETCH = load in one trip.
+
+---
+
+# Day 18 — God-Level Notes (Notebook)
+
+## Why `@Query`?
+
+Derived methods = **name → query** for simple reads. Stop when:
+
+1. Spring **cannot name it** — `JOIN FETCH`, aggregates (`COUNT`, `AVG`), subqueries, updates.
+2. Method name is **unreadable** — same logic clearer in JPQL.
+
+Derived `findByDepartment_Name` = **WHERE filter** (JOIN for condition). It does **not** fetch association into memory. LAZY + loop → **N+1**.
+
+---
+
+## JPQL vs SQL
+
+| JPQL | SQL |
+|------|-----|
+| `EmployeeEntity` (class) | `employees` (table) |
+| `e.department.name` (field path) | `department_id`, `departments.name` |
+| `SELECT e FROM … e` (alias required) | `SELECT *` OK in SQL |
+
+JPQL = **object model language**. Hibernate translates to SQL.
+
+Invalid: `SELECT * FROM EmployeeEntity` → grammar exception. Use alias: `SELECT e FROM EmployeeEntity e`.
+
+---
+
+## `@Query` + `@Param`
+
+```java
+@Query("""
+    SELECT e FROM EmployeeEntity e
+    WHERE e.department.name = :deptName AND e.salary > :minSalary
+    """)
+List<EmployeeEntity> findEmployeesByDepartmentNameAndSalaryAbove(
+    @Param("deptName") String deptName,
+    @Param("minSalary") BigDecimal minSalary);
+```
+
+- `:deptName` = named bind parameter in JPQL.
+- `@Param("deptName")` = maps method argument to JPQL name (required when names differ or for clarity).
+- Text blocks (`"""`) = readable multi-line JPQL.
+
+---
+
+## JOIN vs JOIN FETCH
+
+| Kind | Purpose | After query |
+|------|---------|-------------|
+| **JOIN** (in derived or plain `@Query`) | Filter (`WHERE dept.name = ?`) | Association still **LAZY** |
+| **JOIN FETCH** | **Eager load in same query** | Association **initialized** in PC |
+
+```java
+@Query("""
+    SELECT e FROM EmployeeEntity e
+    JOIN FETCH e.department d
+    WHERE d.name = :deptName AND e.salary > :minSalary
+    """)
+```
+
+Observed SQL (1 query):
+
+```sql
+SELECT ee.id, d.id, d.location, d.name, ee.email, ee.name, ee.salary
+FROM employees ee
+JOIN departments d ON d.id = ee.department_id
+WHERE d.name = ? AND ee.salary > ?
+```
+
+Loop `getDepartment().getName()` → no extra SELECTs.
+
+---
+
+## N+1 fix decision tree
+
+```text
+Need association in loop?
+├─ Stay LAZY (default)
+├─ DON'T use global EAGER on @ManyToOne (over-fetch, still N+1 across different FKs)
+├─ DON'T rely on derived findByDepartment_Name alone (filter ≠ fetch)
+└─ DO use @Query + JOIN FETCH on the read that needs the graph
+```
+
+| Approach | Queries (2 IT employees, need dept name) |
+|----------|------------------------------------------|
+| `@Query` JOIN only + LAZY + loop | 1 + N dept SELECTs (N+1) |
+| `@ManyToOne(EAGER)` + derived/@Query | 1 main + 1+ dept SELECT(s) |
+| `@Query JOIN FETCH` + LAZY | **1 total** ✅ |
+
+---
+
+## Persistence context bonus (EAGER experiment)
+
+Two employees, **same** `department_id`:
+
+- EAGER loads department once → 1 dept SELECT.
+- Second `getDepartment()` → **same** `DepartmentEntity` instance from PC (identity map) — no 2nd SELECT.
+- Different department IDs with EAGER → typically **one SELECT per distinct id** (N+1 pattern).
+
+JOIN FETCH avoids this entirely by loading graph in one query.
+
+---
+
+## When to use what
+
+| Situation | Tool |
+|-----------|------|
+| Simple filter/sort/exists | Derived method |
+| Same filter, clearer JPQL | `@Query` |
+| Need association in same tx / loop | `@Query JOIN FETCH` |
+| Complex report / aggregate | `@Query` (later: native SQL) |
+
+Keep **`@ManyToOne(LAZY)`** in production. Fetch explicitly where needed.
+
+---
+
+## Mental model
+
+```text
+Repository @Query JPQL
+  ↓
+Spring Data parses + binds @Param
+  ↓
+Hibernate → SQL (show-sql)
+  ↓
+Persistence context (managed entities, identity map)
+  ↓
+Loop safe if JOIN FETCH loaded the association inside tx
+```
+
+---
+
+## Hard rules (memorize)
+
+1. JPQL uses **entity + field names**, not table/column names.
+2. `SELECT e FROM Entity e` — alias required; no SQL `*`.
+3. Derived JOIN = **filter**; `JOIN FETCH` = **load strategy**.
+4. **N+1 fix** = `JOIN FETCH` on the query that returns the list, not global EAGER.
+5. PC dedupes by **entity id** — same dept loaded once can serve many employees (still prefer JOIN FETCH for one round trip).
+6. **`@Transactional` service** — touch lazy/fetched associations inside tx; return DTOs to controller.
+
+---
+
+## What's next (Day 19)
+
+| Topic | Why |
+|-------|-----|
+| **`spring.jpa.open-in-view`** | Boot enables by default — lazy loads can happen outside your `@Transactional` service (you saw the WARN in logs) |
+| When to disable OSIV | Production best practice |
+
+Day 18 = write JPQL when names fail + **JOIN FETCH** kills N+1.  
+Day 19 = where transactions **end** in a web app.
+
+Ready for day review → God-level notes → Jira Done.
 
 
 
