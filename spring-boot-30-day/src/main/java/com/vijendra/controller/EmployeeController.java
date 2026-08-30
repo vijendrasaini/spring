@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.springframework.dao.EmptyResultDataAccessException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -41,9 +43,8 @@ public class EmployeeController {
     }
 
     @GetMapping()
-    public List<EmployeeResponse> getEmployees() {
-        List<Employee> employees = this.employeeService.getAllEmployees();
-        return employees.stream().map(employee -> toEmployee(employee)).toList();
+    public Page<EmployeeResponse> getEmployees(Pageable pageable) {
+        return this.employeeService.getEmployees(pageable).map(this::toEmployee);
     }
 
     @PostMapping()

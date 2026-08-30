@@ -4474,7 +4474,7 @@ Ready for day review → God-level notes → Jira Done.
 
 ---
 
-# Day 20 — Pagination (`Pageable`) 🚧 IN PROGRESS
+# Day 20 — Pagination (`Pageable`) ✅ DONE
 
 ## Day 20 Objective
 
@@ -4518,11 +4518,204 @@ Jira ticket: _(pending)_
 - Q2: SQL uses LIMIT/OFFSET; Spring HTTP params = `page`, `size`, `sort` (page is 0-based). Refined.
 - Q3: Page metadata = totalElements, totalPages, number, size, first/last, etc. — not "offset" in API. Refined.
 
-# Day 20 Experiment 2 — first Pageable in repository/service 🚧 NEXT
+# Day 20 Experiment 2 — first Pageable in service ✅ DONE
 
-Pagination fundamentals taught first (user request): Pageable, PageRequest, Sort, Page, Slice, JpaRepository methods, controller binding.
+- `getEmployees(Pageable)` → `employeeRepository.findAll(pageable)`.
+- Runner: `PageRequest.of(0, 2, Sort.by("name").descending())`.
+- Observed: `totalElements=3`, `totalPages=2`, 2 SQL (data LIMIT + count).
+- Note: returns `Page<EmployeeEntity>` — map to DTO in Experiment 3/4.
 
-Quiz: Pageable=input, Page=output+metadata; Page=2 SQL (count+data); HTTP page+size→LIMIT/OFFSET. ✅
+# Day 20 Experiment 3 — Pageable in controller (HTTP) ✅ DONE
+
+- `GET /employees?page=&size=&sort=` → Spring binds `Pageable` automatically.
+- Controller: `Page<EmployeeResponse>` via `employeeService.getEmployees(pageable).map(toEmployee)`.
+- Service: `@Transactional(readOnly=true)` + `Page<Employee>` + `.map(toEmployee)`.
+- Postman verified: LIMIT/OFFSET + count query; sort via `sort=id,desc`.
+- WARN: serializing `PageImpl` directly — stable JSON needs custom wrapper or `@EnableSpringDataWebSupport` (park for later).
+
+---
+
+# Day 20 — God-Level Notes (Notebook)
+
+## Why pagination?
+
+`findAll()` → every row into JVM + huge JSON. Bad for memory, network, UX, and N+1 on associations.
+
+**Pagination** = DB returns one **page** (`LIMIT` / `OFFSET`) + optional **total count**.
+
+---
+
+## Core types (input → output)
+
+| Type | Role | Package |
+|------|------|---------|
+| **`Pageable`** | Input: page, size, sort | `org.springframework.data.domain` |
+| **`PageRequest`** | Build `Pageable` in code | same |
+| **`Sort`** | Order by entity fields | same |
+| **`Page<T>`** | Output: content + metadata | same |
+| **`Slice<T>`** | Output: content + hasNext only (no total count) | same |
+
+```text
+Pageable (input)  →  repository.findAll(pageable)  →  Page<T> (output)
+```
+
+---
+
+## PageRequest cheat sheet
+
+```java
+PageRequest.of(0, 10)                                    // page 0, size 10
+PageRequest.of(1, 10, Sort.by("salary").descending())
+PageRequest.of(0, 5, Sort.by("department.name").asc())   // nested property
+```
+
+**Page is 0-based:** `page=0` = first page. `OFFSET = page × size`.
+
+---
+
+## HTTP → Pageable (no manual parsing)
+
+```java
+@GetMapping
+public Page<EmployeeResponse> getEmployees(Pageable pageable) { ... }
+```
+
+```text
+GET /employees?page=0&size=10&sort=salary,desc&sort=name,asc
+```
+
+| Param | Maps to |
+|-------|---------|
+| `page` | page number (0-based) |
+| `size` | page size |
+| `sort=field,dir` | `Sort` (repeat for multiple) |
+
+Defaults (if omitted): typically `page=0`, `size=20`.
+
+---
+
+## Repository (free from JpaRepository)
+
+```java
+Page<EmployeeEntity> findAll(Pageable pageable);
+
+// Derived + pagination — Pageable LAST:
+Page<EmployeeEntity> findByDepartment_Name(String name, Pageable pageable);
+List<EmployeeEntity> findBySalaryGreaterThan(BigDecimal min, Pageable pageable);
+// List + Pageable → paginated SQL but NO total metadata
+```
+
+---
+
+## SQL behind Page<T>
+
+Usually **2 queries**:
+
+```sql
+SELECT count(*) FROM employees ...;           -- totalElements, totalPages
+SELECT ... FROM employees ... ORDER BY ... LIMIT ? OFFSET ?;
+```
+
+---
+
+## Service pattern (production)
+
+```java
+@Transactional(readOnly = true)
+public Page<Employee> getEmployees(Pageable pageable) {
+    return employeeRepository.findAll(pageable)
+            .map(this::toEmployee);   // map content; keep page metadata
+}
+```
+
+- **`readOnly = true`** on reads.
+- **`.map()`** on `Page` transforms rows, preserves `totalElements`, etc.
+- Map lazy associations **inside** this method (OSIV off).
+
+---
+
+## Controller pattern
+
+```java
+@GetMapping
+public Page<EmployeeResponse> getEmployees(Pageable pageable) {
+    return employeeService.getEmployees(pageable).map(this::toEmployee);
+}
+```
+
+Return **`Page<DTO>`** — not `Page<Entity>` to JSON.
+
+---
+
+## Page metadata (what client gets)
+
+| Field | Meaning |
+|-------|---------|
+| `content` | Rows on this page |
+| `totalElements` | All rows in DB |
+| `totalPages` | `ceil(totalElements / size)` |
+| `number` | Current page (0-based) |
+| `size` | Page size |
+| `first` / `last` | Boundary flags |
+
+---
+
+## Page vs Slice
+
+| | `Page<T>` | `Slice<T>` |
+|---|-----------|------------|
+| Total count | ✅ `SELECT COUNT(*)` | ❌ |
+| Total pages | ✅ | ❌ |
+| Next page? | ✅ | ✅ `hasNext()` |
+| SQL cost | 2 queries | 1 query |
+
+Use **`Page`** for "Page X of Y". Use **`Slice`** for infinite scroll.
+
+---
+
+## Pagination + lazy associations (N+1 per page)
+
+Paginating **does not** fix N+1. Each row on the page that calls `getDepartment()` in `toEmployee()` can trigger a dept SELECT.
+
+**Fix for list reads:** `@Query JOIN FETCH` (Day 18) on a paginated query — advanced; `@EntityGraph` later.
+
+---
+
+## PageImpl JSON warning (Boot 3+/4)
+
+Returning `Page` directly may log:
+
+```text
+Serializing PageImpl instances as-is is not supported...
+```
+
+For stable API contracts, wrap in a custom DTO later (`PagedResponse { content, totalElements, ... }`) or enable Spring Data web support. Fine for learning.
+
+---
+
+## Hard rules (memorize)
+
+1. **`Pageable` = in**, **`Page` = out** (with metadata).
+2. **`page` is 0-based** in Spring (HTTP and code).
+3. **`Page` ≈ 2 SQL** — count + data.
+4. Put **`Pageable` last** on repository methods.
+5. **`@Transactional(readOnly=true)`** on paginated reads that touch lazy fields.
+6. Pagination limits rows — **JOIN FETCH** still needed to kill N+1 within a page.
+
+---
+
+## What's next (Day 21+)
+
+| Topic | Why |
+|-------|-----|
+| Custom paged response DTO | stable JSON, hide PageImpl |
+| `@EntityGraph` | fetch plan without JPQL JOIN FETCH |
+| Native SQL `@Query` | reports / DB-specific SQL |
+| Keyset pagination | OFFSET slow on huge tables |
+
+Day 20 = stop using unbounded `findAll()` on list APIs.
+
+Ready for day review → God-level notes → Jira Done.
 
 
 

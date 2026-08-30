@@ -6,6 +6,8 @@ import com.vijendra.entity.EmployeeEntity;
 import com.vijendra.model.Employee;
 import com.vijendra.repository.EmployeeRepository;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -121,5 +123,10 @@ public class EmployeeService {
         employee.setSalary(employeeEntity.getSalary());
         employee.setId(employeeEntity.getId());
         return employee;
+    }
+
+    @Transactional(readOnly = true)
+    public Page<Employee> getEmployees(Pageable pageable) {
+        return this.employeeRepository.findAll(pageable).map(this::toEmployee);
     }
 }
