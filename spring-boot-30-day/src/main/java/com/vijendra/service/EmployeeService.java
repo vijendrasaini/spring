@@ -43,11 +43,14 @@ public class EmployeeService {
         // return employeeDAO.create(employee);
     }
 
+    @Transactional
     public Employee getEmployee(int employeeId) {
         Optional<EmployeeEntity> employeeEntity = employeeRepository.findById(employeeId);
         if(employeeEntity.isEmpty()) {
             throw new NoSuchElementException("Employee with id %d not found.".formatted(employeeId));
         }
+
+        employeeEntity.get().getDepartment().getName();
         return toEmployee(employeeEntity.get());
         // return employeeDAO.get(employeeId);
     }
@@ -114,7 +117,7 @@ public class EmployeeService {
 
     private Employee toEmployee(EmployeeEntity employeeEntity) {
         Employee employee = new Employee(employeeEntity.getName(), employeeEntity.getEmail());
-        // employee.setDepartment(employeeEntity.getDepartment());
+        employee.setDepartment(employeeEntity.getDepartment().getName());
         employee.setSalary(employeeEntity.getSalary());
         employee.setId(employeeEntity.getId());
         return employee;

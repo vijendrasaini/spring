@@ -10,15 +10,18 @@ import com.vijendra.entity.DepartmentEntity;
 import com.vijendra.entity.EmployeeEntity;
 import com.vijendra.model.Employee;
 import com.vijendra.repository.EmployeeRepository;
+import com.vijendra.service.EmployeeService;
 import com.vijendra.service.JPAEmployeeService;
 
 @Component
 public class JpaLearningRunner implements CommandLineRunner{
     private final JPAEmployeeService jpaEmployeeService;
     private final EmployeeRepository employeeRepository;
-    public JpaLearningRunner(JPAEmployeeService jpaEmployeeService, EmployeeRepository employeeRepository) {
+    private final EmployeeService employeeService;
+    public JpaLearningRunner(JPAEmployeeService jpaEmployeeService, EmployeeRepository employeeRepository, EmployeeService employeeService) {
         this.jpaEmployeeService = jpaEmployeeService;
         this.employeeRepository = employeeRepository;
+        this.employeeService = employeeService;
     }
 
     public void run(String... args) {
@@ -84,10 +87,13 @@ public class JpaLearningRunner implements CommandLineRunner{
         // employeeEntities.stream().forEach(ee -> System.out.println(ee.getName()));
 
         // JPQL 
-        List<EmployeeEntity> employeeEntities = this.employeeRepository.findEmployeesByDepartmentNameAndSalaryAbove("IT", new BigDecimal("200.00"));
-        employeeEntities.stream().forEach(ee -> System.out.println("Name : %s, DeptName : %s".formatted(ee.getName(), ee.getDepartment().getName())));
-        System.out.println("______________________________________");
+        // List<EmployeeEntity> employeeEntities = this.employeeRepository.findEmployeesByDepartmentNameAndSalaryAbove("IT", new BigDecimal("200.00"));
+        // employeeEntities.stream().forEach(ee -> System.out.println("Name : %s, DeptName : %s".formatted(ee.getName(), ee.getDepartment().getName())));
+        // System.out.println("______________________________________");
 
+        // spring.jpa.open-in-view
+        // Employee employee = this.employeeService.getEmployee(1);
+        // System.out.println("Id : %d, Name : %s".formatted(employee.getId(), employee.getName()));
         System.out.println("=== JPA Learning Runner end ===");
     }
 }
