@@ -4717,6 +4717,392 @@ Day 20 = stop using unbounded `findAll()` on list APIs.
 
 Ready for day review → God-level notes → Jira Done.
 
+---
+
+# Day 21 — `@EntityGraph` (Fetch Plans) ✅ DONE
+
+## Day 21 Objective
+
+Connect:
+
+```text
+Day 18 — JOIN FETCH in JPQL (explicit fetch in query string)
+Day 20 — paginated list + lazy dept → N+1 per page
+        ↓
+Day 21 — @EntityGraph (declarative fetch plan on repository method / entity)
+```
+
+Core question:
+
+> **How do I fetch `department` with employees without writing JOIN FETCH JPQL — especially on `findAll(Pageable)`?**
+
+In scope:
+
+- WHY `@EntityGraph` (reuse fetch plan, works with derived methods + Pageable)
+- `@NamedEntityGraph` on entity + `@EntityGraph` on repository
+- Inline `@EntityGraph(attributePaths = {"department"})`
+- `EntityGraphType.FETCH` vs `LOAD` (FETCH default on queries)
+- Compare SQL / query count vs plain `findAll` + N+1
+- Fix paginated `getEmployees` N+1
+
+Out of scope (Day 22+):
+
+- Native SQL `@Query(nativeQuery = true)`
+- Custom paged response DTO (PageImpl warning)
+- Keyset / cursor pagination
+
+Do not start experiments until Jira ticket exists.
+
+Jira ticket: _(pending)_
+
+---
+
+# Day 21 Experiment 1 — WHY @EntityGraph? ✅ DONE
+
+- Q1: toEmployee touches lazy department → N+1 extra SELECTs per page row. ✅
+- Q2: @EntityGraph on repo — no custom JPQL JOIN FETCH needed; works with findAll(Pageable). ✅
+- Q3: attributePaths = Java entity field name (relationship), not table/column. ✅
+
+# Day 21 Experiment 2 — @NamedEntityGraph on entity ✅ DONE
+
+- `@NamedEntityGraph(name = "Employee.withDepartment", attributeNodes = department)` on EmployeeEntity.
+
+# Day 21 Experiment 3 — @EntityGraph on repository ✅ DONE
+
+- Gotcha: custom name `findAllWithDepartment` without `@Query` → derived parse fails → `QueryCreationException`.
+- Fix options: `@Query` + `@EntityGraph`, or override `findAll(Pageable)` with `@EntityGraph`.
+- Final: override `findAll(Pageable)` + inline `@EntityGraph(attributePaths = {"department"})`.
+- Postman: 1 data query with LEFT JOIN departments + 1 count query; no N+1 dept SELECTs.
+
+# Day 21 Experiment 4 — inline vs named graph ✅ DONE
+
+- Named: `@NamedEntityGraph` on entity + `@EntityGraph(value = "Employee.withDepartment")`.
+- Inline: `@EntityGraph(attributePaths = {"department"})` — no entity annotation needed.
+- Same SQL shape — JOIN in one query.
+
+---
+
+# Day 21 — God-Level Notes (Notebook)
+
+## Why @EntityGraph?
+
+Day 20 paginated list + `toEmployee()` touching lazy `department` → N+1 per page.
+
+Day 18 fix = JOIN FETCH in JPQL. Day 21 fix = **declarative fetch plan** on repository — especially for `findAll(Pageable)` without writing JPQL.
+
+---
+
+## Two ways to fetch association in one query
+
+| Approach | Where | Best for |
+|----------|-------|----------|
+| **JOIN FETCH** | Inside `@Query` JPQL | Complex filters, custom JPQL |
+| **@EntityGraph** | On repository method (+ optional `@NamedEntityGraph` on entity) | `findAll(Pageable)`, derived methods, reusable fetch plans |
+
+Both → Hibernate adds JOIN → department loaded in same data query.
+
+---
+
+## @NamedEntityGraph (on entity)
+
+```java
+@NamedEntityGraph(
+    name = "Employee.withDepartment",
+    attributeNodes = @NamedAttributeNode("department")
+)
+public class EmployeeEntity { ... }
+```
+
+Reuse on many repo methods:
+
+```java
+@EntityGraph(value = "Employee.withDepartment")
+Page<EmployeeEntity> findAll(Pageable pageable);
+```
+
+---
+
+## Inline @EntityGraph (on repository — no entity annotation)
+
+```java
+@EntityGraph(attributePaths = {"department"})
+Page<EmployeeEntity> findAll(Pageable pageable);
+```
+
+`attributePaths` = **Java field names** (relationship), not table/column names.
+
+---
+
+## @EntityGraph does NOT define the base query
+
+Two jobs:
+
+1. **Base query** — `@Query`, valid derived name, or override known method (`findAll(Pageable)`)
+2. **Fetch plan** — `@EntityGraph` adds association load to that query
+
+Custom method name like `findAllWithDepartment` without `@Query` → Spring tries derived parse → fails (not valid Subject + By + property grammar).
+
+**Valid without @Query:**
+
+```java
+@Override
+@EntityGraph(attributePaths = {"department"})
+Page<EmployeeEntity> findAll(Pageable pageable);
+```
+
+```java
+@EntityGraph(attributePaths = {"department"})
+Page<EmployeeEntity> findBySalaryGreaterThan(BigDecimal min, Pageable pageable);
+```
+
+---
+
+## EntityGraphType (FETCH vs LOAD)
+
+| Type | Behavior |
+|------|----------|
+| **FETCH** (default on queries) | JOIN — load in same query ✅ fix N+1 |
+| **LOAD** | Separate SELECT when accessed — can still N+1 |
+
+Use **FETCH** (default) for read APIs.
+
+---
+
+## Observed SQL (paginated list)
+
+```sql
+-- data (JOIN from entity graph)
+SELECT ee..., d... FROM employees ee LEFT JOIN departments d ... LIMIT ? OFFSET ?
+
+-- metadata for Page<T>
+SELECT count(*) FROM employees
+```
+
+No `SELECT ... FROM departments WHERE id=?` per row.
+
+---
+
+## Decision tree (production reads)
+
+```text
+Paginated / list API needs association?
+├─ Simple findAll / derived filter → @EntityGraph(attributePaths = {...})
+├─ Complex JPQL → @Query + JOIN FETCH
+├─ @Transactional(readOnly=true) on service
+├─ Map to DTO inside service (OSIV off)
+└─ Stay @ManyToOne(LAZY) on entity
+```
+
+---
+
+## Hard rules (memorize)
+
+1. `@EntityGraph` = fetch plan; still need valid base query (override, derived, or `@Query`).
+2. Invalid derived names fail at **startup** — same as Day 17.
+3. **Named graph** = reuse; **attributePaths** = inline/simple.
+4. **JOIN FETCH** and **@EntityGraph FETCH** — same goal, different style.
+5. Pagination limits rows; **EntityGraph/JOIN FETCH** fixes N+1 **within** the page.
+
+---
+
+## What's next (Day 22+)
+
+| Topic | Why |
+|-------|-----|
+| Native SQL `@Query(nativeQuery=true)` | DB-specific reports |
+| Custom paged response DTO | stable JSON (PageImpl warning) |
+| Keyset pagination | OFFSET slow at huge scale |
+
+Day 21 = declarative fetch plans without JOIN FETCH JPQL.
+
+Ready for day review → God-level notes → Jira Done.
+
+---
+
+# Day 22 — Native SQL (`nativeQuery = true`) ✅ DONE
+
+## Day 22 Objective
+
+Connect:
+
+```text
+Day 18 — @Query + JPQL (entity/field names)
+Day 21 — @EntityGraph (fetch plans)
+        ↓
+Day 22 — @Query(nativeQuery = true) — real SQL, table/column names
+```
+
+Core question:
+
+> **When is JPQL not enough, and how do I run database SQL from a Spring Data repository?**
+
+In scope:
+
+- WHY native SQL (DB functions, reports, legacy SQL, DB-specific syntax)
+- JPQL vs Native SQL — naming rules
+- `@Query(value = "...", nativeQuery = true)` + `@Param`
+- Return `List<EmployeeEntity>` from native SELECT
+- Native JOIN across `employees` + `departments`
+- Observe SQL in logs (no JPQL translation layer for the query body)
+
+Out of scope (later):
+
+- `SqlResultSetMapping` / interface projections for non-entity columns
+- Native query pagination (`countQuery` attribute)
+- Stored procedures
+
+Do not start experiments until Jira ticket exists.
+
+Jira ticket: _(pending)_
+
+---
+
+# Day 22 Experiment 1 — WHY Native SQL? ✅ DONE
+
+- Q1: Native uses table names (`employees`) and SQL column paths (`d.name`), not entity class/field names. ✅ (refine: `d.name` = departments.name column via alias `d`, not entity field path)
+- Q2: Legacy/trusted SQL; complex reports; DB-specific functions. ✅
+- Q3: `nativeQuery=true` → SQL sent as-is to DB, no JPQL→SQL translation. ✅
+
+# Day 22 Experiment 2 — first native query ✅ DONE
+
+- `findBySalaryGreaterThanNative` — `SELECT * FROM employees WHERE salary > :minSalary`, nativeQuery=true.
+- SQL in logs matches written SQL exactly (+ Spring wraps count for Page).
+- User wired to `getEmployees` with Pageable — filters salary > 100 (note: changed list API behavior).
+- Partial SELECT → Hibernate maps present columns; missing → null/0; risky for full entity — prefer SELECT * or DTO projection.
+
+# Day 22 Experiment 3 — native JOIN with departments ✅ DONE
+
+- `findHighEarnersInDeptNative` — table/column JOIN on `department_id`; SQL as-is in logs.
+- Q: native needs `department_id` in JOIN; JPQL uses object path `e.department`. ✅
+- No extra dept SELECTs in runner because only `e.getName()` — did NOT touch lazy `getDepartment()`.
+- Native JOIN + `SELECT e.*` = filter only (like derived JOIN), NOT fetch join — would N+1 if toEmployee() ran.
+
+---
+
+# Day 22 — God-Level Notes (Notebook)
+
+## Why Native SQL?
+
+When JPQL/derived/EntityGraph can't express it — DB functions, legacy SQL, complex reports, MySQL-specific syntax.
+
+**Default order:** derived → JPQL → EntityGraph → **native SQL last**.
+
+---
+
+## JPQL vs Native
+
+| | JPQL | Native (`nativeQuery=true`) |
+|---|------|----------------------------|
+| Names | `EmployeeEntity`, `e.department.name` | `employees`, `department_id`, `d.name` |
+| Portable | Yes | No — tied to MySQL |
+| SQL in logs | Translated from JPQL | **Exactly what you wrote** |
+| `@Param` | `:name` | `:name` (same) |
+
+```java
+@Query(value = "SELECT e.* FROM employees e WHERE e.salary > :min", nativeQuery = true)
+List<EmployeeEntity> findBySalaryNative(@Param("min") BigDecimal min);
+```
+
+---
+
+## Returning entities from native SQL
+
+- **`SELECT *` / `SELECT e.*`** from mapped table → Hibernate maps to `EmployeeEntity` ✅
+- **Partial columns** → missing fields = null/0; missing `id` = broken ❌
+- **Non-entity columns** → use DTO/projection (later)
+
+---
+
+## Native JOIN ≠ fetch join
+
+```sql
+SELECT e.* FROM employees e
+INNER JOIN departments d ON d.id = e.department_id
+WHERE d.name = ?
+```
+
+JOIN here = **filter** (same as derived `findByDepartment_Name`).  
+`SELECT e.*` only maps **employee columns** — `department` association stays **LAZY**.
+
+Extra dept SELECTs happen **only when you call `getDepartment()`** (e.g. `toEmployee()`).
+
+| Code in loop | Extra dept SELECTs? |
+|--------------|---------------------|
+| `e.getName()` only | **No** |
+| `e.getDepartment().getName()` / `toEmployee()` | **Yes** (N+1) |
+
+Native JOIN does **not** replace JOIN FETCH / EntityGraph for loading associations.
+
+---
+
+## Native + pagination
+
+```java
+@Query(value = "SELECT * FROM employees WHERE salary > :min", nativeQuery = true)
+Page<EmployeeEntity> findBySalaryNative(@Param("min") BigDecimal min, Pageable pageable);
+```
+
+Spring wraps your SQL for **count** automatically. Optional explicit `countQuery = "..."` for complex SQL.
+
+---
+
+## Hard rules (memorize)
+
+1. **`nativeQuery = true`** → SQL sent as-is to DB.
+2. Native uses **table + column names**, not entity fields.
+3. **`SELECT e.*`** for entity return type; partial columns → DTO.
+4. Native JOIN filters; does **not** load association unless you fetch explicitly.
+5. Prefer JPQL when possible; native when you **need** SQL power.
+
+---
+
+## Native N+1 fix (bonus experiment)
+
+**Not EntityGraph** — use JOIN + flat projection:
+
+```java
+public interface EmployeeDeptSummary {
+    Integer getId();
+    String getName();
+    BigDecimal getSalary();
+    String getDeptName();  // alias deptName in SQL
+}
+```
+
+```sql
+SELECT e.id AS id, e.name AS name, e.salary AS salary, d.name AS deptName
+FROM employees e
+INNER JOIN departments d ON d.id = e.department_id
+WHERE ...
+```
+
+Return `List<EmployeeDeptSummary>` or `Page<EmployeeDeptSummary>` — 1 data query, dept name in row, no `getDepartment()`.
+
+---
+
+## Native + Page — do NOT add LIMIT/OFFSET manually
+
+```java
+Page<EmployeeDeptSummary> find...(params, Pageable pageable);
+```
+
+- Pass **`Pageable`** as last param — Spring appends `LIMIT`/`OFFSET` (or dialect equivalent).
+- **Do not** write `LIMIT :limit OFFSET :offset` in SQL when using `Pageable` — double pagination / conflict.
+- **`countQuery`** — optional but recommended for JOINs:
+
+```java
+@Query(value = "SELECT e.id, ... JOIN ...", 
+       countQuery = "SELECT count(*) FROM employees e JOIN ...",
+       nativeQuery = true)
+Page<EmployeeDeptSummary> find...(Pageable pageable);
+```
+
+Without `countQuery`, Spring may wrap: `select count(*) from (your full query) a_`.
+
+---
+
+Ready for day review → God-level notes → Jira Done.
+
 
 
 

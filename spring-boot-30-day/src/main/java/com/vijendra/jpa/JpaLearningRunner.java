@@ -10,14 +10,10 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
 
-import com.vijendra.entity.DepartmentEntity;
-import com.vijendra.entity.EmployeeEntity;
-import com.vijendra.model.Employee;
+import com.vijendra.dto.EmployeeDeptSummary;
 import com.vijendra.repository.EmployeeRepository;
 import com.vijendra.service.EmployeeService;
 import com.vijendra.service.JPAEmployeeService;
-
-import jakarta.el.ELManager;
 
 @Component
 public class JpaLearningRunner implements CommandLineRunner {
@@ -117,16 +113,30 @@ public class JpaLearningRunner implements CommandLineRunner {
         // System.out.println("Id : %d, Name : %s".formatted(employee.getId(),
         // employee.getName()));
 
-        Page<Employee> page = this.employeeService
-                .getEmployees(PageRequest.of(0, 2, Sort.by("name").descending()));
-        System.out.println("size: " + page.getSize());
-        System.out.println("Number : " + page.getNumber());
-        System.out.println("Total element : " + page.getTotalElements());
-        System.out.println("Total pages : " + page.getTotalPages());
+        // Page<Employee> page = this.employeeService
+        // .getEmployees(PageRequest.of(0, 2, Sort.by("name").descending()));
+        // System.out.println("size: " + page.getSize());
+        // System.out.println("Number : " + page.getNumber());
+        // System.out.println("Total element : " + page.getTotalElements());
+        // System.out.println("Total pages : " + page.getTotalPages());
 
-        System.out.println("==========data==========");
-        page.getContent().stream()
-                .forEach(ee -> System.out.println("ID : %d, Name : %s".formatted(ee.getId(), ee.getName())));
+        // System.out.println("==========data==========");
+        // page.getContent().stream()
+        // .forEach(ee -> System.out.println("ID : %d, Name : %s".formatted(ee.getId(),
+        // ee.getName())));
+
+        // Day 22 bonus — native DTO projection (1 query, dept name in result, no lazy load)
+        System.out.println("--- native DTO list ---");
+        employeeRepository.findHighEarnersInDeptSummary("IT", new BigDecimal("100.00"))
+                .forEach(row -> System.out.println(
+                        "%s | %s | dept=%s".formatted(row.getName(), row.getSalary(), row.getDeptName())));
+
+        System.out.println("--- native DTO page (Pageable — no manual LIMIT/OFFSET) ---");
+        Page<EmployeeDeptSummary> page = employeeRepository.findHighEarnersInDeptSummaryPage(
+                "IT", new BigDecimal("100.00"), PageRequest.of(0, 2, Sort.by("salary").descending()));
+        System.out.println("totalElements=" + page.getTotalElements() + ", totalPages=" + page.getTotalPages());
+        page.getContent().forEach(row -> System.out.println(
+                "%s | %s | dept=%s".formatted(row.getName(), row.getSalary(), row.getDeptName())));
 
         System.out.println("=== JPA Learning Runner end ===");
     }

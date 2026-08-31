@@ -125,6 +125,10 @@ public class EmployeeService {
         return employee;
     }
 
+    // @Transactional(readOnly = true)
+    // public Page<Employee> getEmployees(Pageable pageable) {
+    //     return this.employeeRepository.findAll(pageable).map(this::toEmployee);
+    // }
     @Transactional(readOnly = true)
     public Page<Employee> getEmployees(Pageable pageable) {
         return this.employeeRepository.findAll(pageable).map(this::toEmployee);
