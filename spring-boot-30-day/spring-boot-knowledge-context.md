@@ -5567,7 +5567,7 @@ Ready for day review → God-level notes → Jira Done.
 
 ---
 
-# Day 25 — JPA Auditing (`@CreatedDate` / `@LastModifiedDate`) 🚧 IN PROGRESS
+# Day 25 — JPA Auditing (`@CreatedDate` / `@LastModifiedDate`) ✅ DONE
 
 ## Day 25 Objective
 
@@ -5610,7 +5610,7 @@ Jira ticket: created.
 # Day 25 Experiment 1 — WHY JPA Auditing? ✅ DONE
 
 - Q1: manual set in every service → human error, inconsistent across team/services, easy to forget in prod. ✅
-- Q2: entity fields + DB columns needed — but also `@EntityListeners(AuditingEntityListener.class)` on entity and `@EnableJpaAuditing` at app/config level (not just annotations on fields). ✅ (partial — completed in notes)
+- Q2: entity fields + DB columns needed — but also `@EntityListeners(AuditingEntityListener.class)` on entity and `@EnableJpaAuditing` at app/config level (not just annotations on fields). ✅
 - Q3: UPDATE → only `updatedAt` changes; `createdAt` stays frozen from INSERT. ✅
 
 # Day 25 Experiment 2 — DB columns + entity annotations ✅ DONE
@@ -5620,14 +5620,179 @@ Jira ticket: created.
 - `@EntityListeners(AuditingEntityListener.class)` on entity class.
 - Before `@EnableJpaAuditing`: INSERT failed — `created_at` null → `SQLIntegrityConstraintViolationException` (expected; listener/auditing not fully active yet, or columns NOT NULL with no value set).
 
-# Day 25 Experiment 3 — @EnableJpaAuditing + prove INSERT/UPDATE 🚧 NEXT
+# Day 25 Experiment 3 — @EnableJpaAuditing + prove INSERT/UPDATE ✅ DONE
 
+- Added `@EnableJpaAuditing` on `SpringBoot30DayApplication`.
+- INSERT: both `created_at` and `updated_at` set to the **same** value. ✅
+- UPDATE (runner): only `updated_at` changed; `created_at` unchanged. ✅
 
+# Day 25 Experiment 4 — AuditorAware (optional) ⏭️ SKIPPED
 
+- Skipped for now — concept understood (`@CreatedBy`, `@LastModifiedBy` + `AuditorAware<T>` bean).
+- Revisit when project needs "who changed this row" (usually with Spring Security username).
 
+---
 
+# Day 25 — God-Level Notes (Notebook)
 
+## Why JPA Auditing?
 
+Every create/update needs timestamps. Manual `setCreatedAt(now())` in every service:
 
+- easy to forget
+- inconsistent across team / code paths
+- duplicates logic in JDBC, JPA, batch jobs
 
+**Auditing** = Spring sets audit fields automatically at **persist/update** time via entity listener — one place, all entities.
 
+---
+
+## Three pieces (all required for timestamps)
+
+| Piece | Where | Role |
+|-------|-------|------|
+| `@CreatedDate` / `@LastModifiedDate` | Entity fields | Mark which fields are audit metadata |
+| `@EntityListeners(AuditingEntityListener.class)` | Entity class | Listener that **sets** those fields on lifecycle events |
+| `@EnableJpaAuditing` | Main class or `@Configuration` | **Turns on** auditing machinery at startup |
+
+Annotations on fields alone = labels only. Without listener + `@EnableJpaAuditing` → fields stay `null` → NOT NULL column → `SQLIntegrityConstraintViolationException`.
+
+---
+
+## How it works (lifecycle)
+
+```text
+INSERT (@PrePersist)
+  → AuditingEntityListener sets @CreatedDate AND @LastModifiedDate (same time)
+
+UPDATE (@PreUpdate)
+  → AuditingEntityListener sets @LastModifiedDate only
+  → @CreatedDate frozen forever
+```
+
+Runs inside JPA persistence lifecycle — no extra code in service (works with `save()` / `saveAndFlush()`).
+
+---
+
+## Entity setup (what we built)
+
+```java
+@Entity
+@EntityListeners(AuditingEntityListener.class)
+public class EmployeeEntity {
+
+    @CreatedDate
+    private LocalDateTime createdAt;
+
+    @LastModifiedDate
+    private LocalDateTime updatedAt;
+}
+```
+
+**App:**
+
+```java
+@EnableJpaAuditing
+@SpringBootApplication
+public class SpringBoot30DayApplication { ... }
+```
+
+**DB:**
+
+```sql
+ALTER TABLE employees
+  ADD COLUMN created_at DATETIME(6),
+  ADD COLUMN updated_at DATETIME(6);
+```
+
+Use `DATETIME(6)` for `LocalDateTime` microsecond precision with Hibernate + MySQL.
+
+---
+
+## What we proved
+
+| Event | `created_at` | `updated_at` |
+|-------|--------------|--------------|
+| INSERT | set | set (same value) |
+| UPDATE | unchanged | new value |
+
+Observed via runner (`updateEmployeeName`) + HeidiSQL.
+
+---
+
+## `@EntityListeners(AuditingEntityListener.class)` — mandatory?
+
+**Yes** for Spring Data JPA auditing on that entity (or on a `@MappedSuperclass` base entity shared by many tables).
+
+| Without | Result |
+|---------|--------|
+| `@EntityListeners` | Fields never auto-populated |
+| `@EnableJpaAuditing` | Listener not wired — same failure |
+| DB NOT NULL + no value | INSERT fails |
+
+**Alternative:** custom `@PrePersist` / `@PreUpdate` on entity — works but you maintain it per entity; prefer auditing for standard timestamps.
+
+---
+
+## Optional: who changed it (`AuditorAware`) — skipped, for later
+
+| Annotation | When set |
+|------------|----------|
+| `@CreatedBy` | INSERT |
+| `@LastModifiedBy` | INSERT + every UPDATE |
+
+Requires `AuditorAware<T>` bean — e.g. `() -> Optional.of(SecurityContext username)` or `"system"` in dev.
+
+Use when audit trail needs **who**, not just **when**.
+
+---
+
+## vs manual / other approaches
+
+| Approach | Pros | Cons |
+|----------|------|------|
+| Manual in service | Simple for 1 place | Forgotten, duplicated, inconsistent |
+| `@PrePersist` on entity | No Spring Data dep | Per-entity boilerplate |
+| **JPA Auditing** | Central, reusable, `@CreatedBy` ready | Needs 3-piece setup + DB columns |
+| Hibernate Envers | Full revision history | Heavy — different use case |
+
+---
+
+## Hard rules (memorize)
+
+1. **Timestamps** → `@CreatedDate` + `@LastModifiedDate` + `@EntityListeners(AuditingEntityListener.class)` + `@EnableJpaAuditing`.
+2. **INSERT** sets both dates; **UPDATE** changes only `@LastModifiedDate`.
+3. **Don't** manually set audit fields in service unless you have a special reason.
+4. **DB columns must exist** (or DDL auto-create) — auditing fills Java fields before flush, not magic after INSERT.
+5. **`LocalDateTime`** common with MySQL `DATETIME(6)`; **`Instant`** if you want UTC everywhere.
+6. **`@Modifying` bulk UPDATE** bypasses entity lifecycle — audit fields **not** auto-updated on those rows (load + save or trigger in SQL).
+
+---
+
+## Decision tree
+
+```text
+Need createdAt / updatedAt on entity?
+├─ Yes
+│   ├─ Add DB columns
+│   ├─ @CreatedDate / @LastModifiedDate on entity
+│   ├─ @EntityListeners(AuditingEntityListener.class)
+│   ├─ @EnableJpaAuditing on app/config
+│   └─ Verify INSERT (both set) + UPDATE (only updatedAt)
+└─ Need who changed it too?
+    └─ @CreatedBy / @LastModifiedBy + AuditorAware bean (Day 25+ / with Security)
+```
+
+---
+
+## What's next (Day 26+)
+
+| Topic | Why |
+|-------|-----|
+| `@DataJpaTest` | slice test — repo + JPA only, no full `@SpringBootTest` |
+| `@CreatedBy` + Security | when auth exists in project |
+| Envers | full entity revision history (separate topic) |
+
+Day 25 = automatic **when** on persist/update — persistence layer, not scattered service code.
+
+Ready for day review → God-level notes → Jira Done.
