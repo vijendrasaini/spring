@@ -1,5 +1,6 @@
 package com.vijendra.service;
 
+import java.math.BigDecimal;
 import java.util.NoSuchElementException;
 
 import org.springframework.stereotype.Service;
@@ -7,15 +8,27 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.vijendra.entity.DepartmentEntity;
 import com.vijendra.entity.EmployeeEntity;
-import com.vijendra.model.Employee;
+import com.vijendra.repository.EmployeeRepository;
 
 import jakarta.persistence.EntityManager;
 
 @Service
 public class JPAEmployeeService {
     private final EntityManager entityManager;
-    public JPAEmployeeService(EntityManager em) {
+    private final EmployeeRepository employeeRepository;
+    public JPAEmployeeService(EntityManager em, EmployeeRepository er) {
         this.entityManager = em;
+        this.employeeRepository = er;
+    }
+
+    @Transactional // must for update queries
+    public int updateSalaryByDepartment(String deptName, BigDecimal salary) {
+        return this.employeeRepository.updateSalaryByDepartment(deptName, salary);
+    }
+
+    @Transactional // must for update queries
+    public int deleteByEmail(String email) {
+        return this.employeeRepository.deleteByEmail(email);
     }
 
     @Transactional

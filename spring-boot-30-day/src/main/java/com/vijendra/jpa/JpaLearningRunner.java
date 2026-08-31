@@ -126,17 +126,26 @@ public class JpaLearningRunner implements CommandLineRunner {
         // ee.getName())));
 
         // Day 22 bonus — native DTO projection (1 query, dept name in result, no lazy load)
-        System.out.println("--- native DTO list ---");
-        employeeRepository.findHighEarnersInDeptSummary("IT", new BigDecimal("100.00"))
-                .forEach(row -> System.out.println(
-                        "%s | %s | dept=%s".formatted(row.getName(), row.getSalary(), row.getDeptName())));
+        // System.out.println("--- native DTO list ---");
+        // employeeRepository.findHighEarnersInDeptSummary("IT", new BigDecimal("100.00"))
+        //         .forEach(row -> System.out.println(
+        //                 "%s | %s | dept=%s".formatted(row.getName(), row.getSalary(), row.getDeptName())));
 
-        System.out.println("--- native DTO page (Pageable — no manual LIMIT/OFFSET) ---");
-        Page<EmployeeDeptSummary> page = employeeRepository.findHighEarnersInDeptSummaryPage(
-                "IT", new BigDecimal("100.00"), PageRequest.of(0, 2, Sort.by("salary").descending()));
-        System.out.println("totalElements=" + page.getTotalElements() + ", totalPages=" + page.getTotalPages());
-        page.getContent().forEach(row -> System.out.println(
-                "%s | %s | dept=%s".formatted(row.getName(), row.getSalary(), row.getDeptName())));
+        // System.out.println("--- native DTO page (Pageable — no manual LIMIT/OFFSET) ---");
+        // Page<EmployeeDeptSummary> page = employeeRepository.findHighEarnersInDeptSummaryPage(
+        //         "IT", new BigDecimal("100.00"), PageRequest.of(0, 2, Sort.by("salary").descending()));
+        // System.out.println("totalElements=" + page.getTotalElements() + ", totalPages=" + page.getTotalPages());
+        // page.getContent().forEach(row -> System.out.println(
+        //         "%s | %s | dept=%s".formatted(row.getName(), row.getSalary(), row.getDeptName())));
+
+        // Updates : 
+        // int updated = jpaEmployeeService.updateSalaryByDepartment("IT", new BigDecimal("99999.00"));
+        // System.out.println("Rows updated: " + updated);
+
+        // Deletes : 
+        int deleted = jpaEmployeeService.deleteByEmail("test4@test.in");
+        System.out.println("Rows deleted: " + deleted);
+
 
         System.out.println("=== JPA Learning Runner end ===");
     }

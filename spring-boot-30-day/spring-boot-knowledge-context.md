@@ -5103,6 +5103,167 @@ Without `countQuery`, Spring may wrap: `select count(*) from (your full query) a
 
 Ready for day review → God-level notes → Jira Done.
 
+---
+
+# Day 23 — `@Modifying` Queries (UPDATE / DELETE) ✅ DONE
+
+## Day 23 Objective
+
+Connect:
+
+```text
+Days 17–22 — READ queries (derived, JPQL, EntityGraph, native, DTO)
+        ↓
+Day 23 — @Modifying + @Query — WRITE via repository (UPDATE / DELETE)
+```
+
+Core question:
+
+> **When is `save()` / `deleteById()` not enough, and how do I run UPDATE/DELETE with `@Query` safely?**
+
+In scope:
+
+- WHY `@Modifying` (bulk update, conditional delete, one SQL round trip)
+- `@Modifying` + `@Query` (JPQL UPDATE / DELETE)
+- **`@Transactional` required** on service (or repo) for modifying queries
+- Return type: `int` (rows affected) vs `void`
+- `clearAutomatically` / `flushAutomatically` (basics)
+- JPQL delete/update uses **entity names**, not table names
+- Contrast: `save()` loads entity first; `@Modifying` runs SQL directly
+
+Out of scope (later):
+
+- Specifications / Criteria (dynamic queries)
+- Custom paged response DTO
+- Native `@Modifying` (mention only)
+
+Do not start experiments until Jira ticket exists.
+
+Jira ticket: _(pending)_
+
+---
+
+# Day 23 Experiment 1 — WHY @Modifying? ✅ DONE
+
+- Q1: bulk UPDATE — findAll+save = N round trips; @Modifying = 1 SQL. ✅
+- Q2: no @Transactional → TransactionRequiredException; explained below.
+- Q3: JPQL DELETE/UPDATE uses entity + field names (`EmployeeEntity`), not tables. ✅
+
+# Day 23 Experiment 2 — first @Modifying UPDATE ✅ DONE
+
+- `updateSalaryByDepartment` in repo + `@Transactional` in JPAEmployeeService.
+- Observed: 1 UPDATE SQL with dept JOIN; rows updated = 3 for IT.
+- Note: add `@Param` on repo params for clarity; first run failed without tx (expected).
+
+# Day 23 Experiment 3 — @Modifying DELETE ✅ DONE
+
+- `deleteByEmail` — JPQL DELETE + `@Param`; `@Transactional` on JPAEmployeeService.
+- Observed: `delete from employees where email=?`; rows deleted = 1.
+
+---
+
+# Day 23 — God-Level Notes (Notebook)
+
+## Why @Modifying?
+
+Days 17–22 = READ. Day 23 = WRITE via `@Query` when `save()` / `deleteById()` isn't enough:
+
+- **Bulk UPDATE** — one SQL for many rows
+- **Conditional DELETE** — delete by email, by dept, etc. without loading entities first
+- **Performance** — no SELECT → mutate → flush per row
+
+---
+
+## Pattern
+
+```java
+@Modifying
+@Query("UPDATE EmployeeEntity e SET e.salary = :salary WHERE e.department.name = :deptName")
+int updateSalaryByDepartment(@Param("deptName") String deptName, @Param("salary") BigDecimal salary);
+
+@Modifying
+@Query("DELETE FROM EmployeeEntity e WHERE e.email = :email")
+int deleteByEmail(@Param("email") String email);
+```
+
+```java
+@Transactional  // REQUIRED — modifying queries change DB state
+public int deleteByEmail(String email) {
+    return employeeRepository.deleteByEmail(email);
+}
+```
+
+---
+
+## @Modifying + @Transactional rules
+
+| Rule | Why |
+|------|-----|
+| **`@Modifying` required** | Spring blocks UPDATE/DELETE `@Query` without it (safety) |
+| **`@Transactional` required** | JPA spec — writes must commit/rollback as a unit; else `TransactionRequiredException` |
+| **Return `int`** | Rows affected (0 = no match, 1+ = success count) |
+| **Service layer tx** | Business boundary — same as Day 9 |
+
+READ repo methods often auto-tx; **WRITE `@Modifying` does not** — caller must open transaction.
+
+---
+
+## save() vs @Modifying
+
+| | `save()` / `deleteById()` | `@Modifying` |
+|---|---------------------------|--------------|
+| Loads entity first? | Usually yes | No |
+| SQL round trips | More | One |
+| Business logic on object | Easy | Harder — SQL only |
+| Persistence context | Managed entity | PC may be stale — `clearAutomatically=true` (default) clears after |
+
+---
+
+## JPQL syntax (UPDATE / DELETE)
+
+Uses **entity + field names** (like Day 18):
+
+```java
+UPDATE EmployeeEntity e SET e.name = :name WHERE e.id = :id
+DELETE FROM EmployeeEntity e WHERE e.email = :email
+```
+
+Not table names (`employees`) unless `nativeQuery = true`.
+
+---
+
+## What we proved
+
+| Experiment | SQL | Result |
+|------------|-----|--------|
+| UPDATE by dept | `update employees join departments set salary=? where d.name=?` | 3 rows |
+| DELETE by email | `delete from employees where email=?` | 1 row |
+
+---
+
+## Hard rules (memorize)
+
+1. **`@Modifying` + `@Query`** for UPDATE/DELETE — both required.
+2. **`@Transactional`** on service — mandatory for modifying queries.
+3. Return **`int`** to see rows affected.
+4. JPQL writes use **entity names**, not tables.
+5. Bulk/conditional writes → `@Modifying`; single entity with logic → `save()`.
+
+---
+
+## What's next (Day 24+)
+
+| Topic | Why |
+|-------|-----|
+| Specifications / Criteria | dynamic filters (search forms) |
+| Custom paged response DTO | stable JSON (PageImpl warning) |
+| `@DataJpaTest` | test repositories in isolation |
+| Auditing (`@CreatedDate`) | auto timestamps |
+
+Day 23 = write side of `@Query`.
+
+Ready for day review → God-level notes → Jira Done.
+
 
 
 

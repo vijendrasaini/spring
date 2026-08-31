@@ -8,6 +8,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -99,4 +100,12 @@ public  interface EmployeeRepository extends JpaRepository<EmployeeEntity, Integ
         @Param("deptName") String deptName,
         @Param("minSalary") BigDecimal minSalary,
         Pageable pageable);
+
+    @Modifying
+    @Query("UPDATE EmployeeEntity e SET e.salary = :salary WHERE e.department.name = :deptName")
+    public int updateSalaryByDepartment(String deptName, BigDecimal salary);
+
+    @Modifying
+    @Query("DELETE FROM EmployeeEntity e WHERE e.email = :email")
+    public int deleteByEmail(@Param("email") String email);
 }
