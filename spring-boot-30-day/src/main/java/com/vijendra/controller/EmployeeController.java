@@ -1,5 +1,6 @@
 package com.vijendra.controller;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -45,6 +47,16 @@ public class EmployeeController {
     @GetMapping()
     public Page<EmployeeResponse> getEmployees(Pageable pageable) {
         return this.employeeService.getEmployees(pageable).map(this::toEmployee);
+    }
+
+    @GetMapping("/search")
+    public Page<EmployeeResponse> searchEmployee(
+        @RequestParam(required = false) String name, 
+        @RequestParam(required = false) String department,
+        @RequestParam(required = false) BigDecimal minSalary,
+        Pageable pageable
+    ) {
+        return this.employeeService.searchEmployees(name, department, minSalary, pageable).map(this::toEmployee);
     }
 
     @PostMapping()

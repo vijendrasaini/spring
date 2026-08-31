@@ -3,17 +3,20 @@ package com.vijendra.service;
 import com.vijendra.annotation.LogExecution;
 import com.vijendra.dao.spring_jdbc.EmployeeDAO;
 import com.vijendra.entity.EmployeeEntity;
+import com.vijendra.jpa.EmployeeSpecs;
 import com.vijendra.model.Employee;
 import com.vijendra.repository.EmployeeRepository;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -132,5 +135,22 @@ public class EmployeeService {
     @Transactional(readOnly = true)
     public Page<Employee> getEmployees(Pageable pageable) {
         return this.employeeRepository.findAll(pageable).map(this::toEmployee);
+    }
+
+    @Transactional()
+    public Page<Employee> searchEmployees(String name, String department, BigDecimal minSalary, Pageable pageable) {
+        List<Specification<EmployeeEntity>> specs = new ArrayList<>();
+        if(name != null && !name.isBlank()) {
+            specs.add(EmployeeSpecs.nameContains(name));
+        }
+        if(department != null && !department.isBlank()) {
+            specs.add(EmployeeSpecs.nameContains(department));
+        }
+        if(minSalary != null) {
+            specs.add(EmployeeSpecs.salaryGreaterThan(minSalary));
+        }
+
+        Specification<EmployeeEntity> finalSpec = Specification.allOf(specs);
+        return this.employeeRepository.findAll(finalSpec, pageable).map(this::toEmployee);
     }
 }

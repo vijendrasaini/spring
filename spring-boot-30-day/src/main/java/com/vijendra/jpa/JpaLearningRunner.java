@@ -8,9 +8,11 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Component;
 
 import com.vijendra.dto.EmployeeDeptSummary;
+import com.vijendra.entity.EmployeeEntity;
 import com.vijendra.repository.EmployeeRepository;
 import com.vijendra.service.EmployeeService;
 import com.vijendra.service.JPAEmployeeService;
@@ -143,9 +145,17 @@ public class JpaLearningRunner implements CommandLineRunner {
         // System.out.println("Rows updated: " + updated);
 
         // Deletes : 
-        int deleted = jpaEmployeeService.deleteByEmail("test4@test.in");
-        System.out.println("Rows deleted: " + deleted);
+        // int deleted = jpaEmployeeService.deleteByEmail("test4@test.in");
+        // System.out.println("Rows deleted: " + deleted);
 
+        // specifications
+        // Specification<EmployeeEntity> spec = Specification.where(null);
+        Specification<EmployeeEntity> spec = EmployeeSpecs.nameContains("Vijendra")
+        // .and(EmployeeSpecs.departmentName("IT"))
+        .and(EmployeeSpecs.salaryGreaterThan(new BigDecimal("100.00")));
+
+        List<EmployeeEntity> employeeEntities = employeeRepository.findAll(spec);
+        employeeEntities.stream().forEach(ee -> System.out.println(ee.getId() + " | " + ee.getName()));
 
         System.out.println("=== JPA Learning Runner end ===");
     }

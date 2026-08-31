@@ -5135,11 +5135,17 @@ Out of scope (later):
 
 - Specifications / Criteria (dynamic queries)
 - Custom paged response DTO
-- Native `@Modifying` (mention only)
+- Auditing (`@CreatedDate`)
+
+In scope (also covered in notes):
+
+- Derived `deleteBy…` / `removeBy…` (DELETE only — no derived UPDATE)
+- Native `@Modifying` UPDATE / DELETE (`nativeQuery = true`)
+- Full matrix: when to use each write style
 
 Do not start experiments until Jira ticket exists.
 
-Jira ticket: _(pending)_
+Jira ticket: created.
 
 ---
 
@@ -5164,105 +5170,142 @@ Jira ticket: _(pending)_
 
 # Day 23 — God-Level Notes (Notebook)
 
-## Why @Modifying?
+## Master matrix — all UPDATE & DELETE options
 
-Days 17–22 = READ. Day 23 = WRITE via `@Query` when `save()` / `deleteById()` isn't enough:
+| Style | UPDATE | DELETE | `@Modifying` | `@Transactional` | Names |
+|-------|:------:|:------:|:------------:|:----------------:|-------|
+| `save()` / `deleteById()` | ✅ | ✅ | No | Recommended | Entity in Java |
+| Derived `deleteBy…` / `removeBy…` | ❌ | ✅ | No | **Required** | Entity fields |
+| `@Modifying` + JPQL `@Query` | ✅ | ✅ | **Yes** | **Required** | Entity + fields |
+| `@Modifying` + native `@Query` | ✅ | ✅ | **Yes** | **Required** | Tables + columns |
 
-- **Bulk UPDATE** — one SQL for many rows
-- **Conditional DELETE** — delete by email, by dept, etc. without loading entities first
-- **Performance** — no SELECT → mutate → flush per row
+**No derived `updateBy…`** — naming grammar has no UPDATE subject. Bulk UPDATE = `@Modifying @Query` (JPQL or native) or load + `save()`.
 
 ---
 
-## Pattern
+## Four styles — when & how
+
+**1. `save()` / `deleteById()`** — single entity, Java logic, dirty checking. Loads row first → bad for bulk.
+
+**2. Derived `deleteByEmail(...)`** — simple DELETE, 1 SQL, no `@Query`. Return `void` or `long` (rows deleted). **DELETE only.**
+
+**3. `@Modifying` + JPQL** — bulk UPDATE/DELETE. Entity names (`EmployeeEntity`, `e.department.name`). Default for bulk writes.
 
 ```java
 @Modifying
-@Query("UPDATE EmployeeEntity e SET e.salary = :salary WHERE e.department.name = :deptName")
-int updateSalaryByDepartment(@Param("deptName") String deptName, @Param("salary") BigDecimal salary);
+@Query("UPDATE EmployeeEntity e SET e.salary = :salary WHERE e.department.name = :dept")
+int updateSalaryByDepartment(@Param("dept") String dept, @Param("salary") BigDecimal salary);
 
 @Modifying
 @Query("DELETE FROM EmployeeEntity e WHERE e.email = :email")
 int deleteByEmail(@Param("email") String email);
 ```
 
-```java
-@Transactional  // REQUIRED — modifying queries change DB state
-public int deleteByEmail(String email) {
-    return employeeRepository.deleteByEmail(email);
-}
+**4. `@Modifying` + native** — same as #3 but table/column names + `nativeQuery = true`. Use for legacy SQL / MySQL-specific syntax.
+
+---
+
+## `@Transactional` — why required for writes
+
+UPDATE/DELETE change DB state → must **commit or rollback as a unit**. Without `@Transactional` on service → `TransactionRequiredException` for `@Modifying` and derived `deleteBy…`. SELECT often works without service tx (repo read-only tx).
+
+---
+
+## Decision tree
+
+```text
+Single entity + Java logic?     → findById + save()  OR  deleteById()
+DELETE by simple field?         → deleteByEmail(...)  OR  @Modifying (same 1 SQL)
+Bulk/conditional UPDATE?        → @Modifying JPQL (default)  OR  native if DB-specific
+Always                          → @Transactional on service
 ```
-
----
-
-## @Modifying + @Transactional rules
-
-| Rule | Why |
-|------|-----|
-| **`@Modifying` required** | Spring blocks UPDATE/DELETE `@Query` without it (safety) |
-| **`@Transactional` required** | JPA spec — writes must commit/rollback as a unit; else `TransactionRequiredException` |
-| **Return `int`** | Rows affected (0 = no match, 1+ = success count) |
-| **Service layer tx** | Business boundary — same as Day 9 |
-
-READ repo methods often auto-tx; **WRITE `@Modifying` does not** — caller must open transaction.
-
----
-
-## save() vs @Modifying
-
-| | `save()` / `deleteById()` | `@Modifying` |
-|---|---------------------------|--------------|
-| Loads entity first? | Usually yes | No |
-| SQL round trips | More | One |
-| Business logic on object | Easy | Harder — SQL only |
-| Persistence context | Managed entity | PC may be stale — `clearAutomatically=true` (default) clears after |
-
----
-
-## JPQL syntax (UPDATE / DELETE)
-
-Uses **entity + field names** (like Day 18):
-
-```java
-UPDATE EmployeeEntity e SET e.name = :name WHERE e.id = :id
-DELETE FROM EmployeeEntity e WHERE e.email = :email
-```
-
-Not table names (`employees`) unless `nativeQuery = true`.
 
 ---
 
 ## What we proved
 
-| Experiment | SQL | Result |
-|------------|-----|--------|
-| UPDATE by dept | `update employees join departments set salary=? where d.name=?` | 3 rows |
-| DELETE by email | `delete from employees where email=?` | 1 row |
+| Exp | SQL | Result |
+|-----|-----|--------|
+| UPDATE by dept (JPQL) | `update employees join departments set salary=?` | 3 rows |
+| DELETE by email (JPQL) | `delete from employees where email=?` | 1 row |
 
 ---
 
 ## Hard rules (memorize)
 
-1. **`@Modifying` + `@Query`** for UPDATE/DELETE — both required.
-2. **`@Transactional`** on service — mandatory for modifying queries.
-3. Return **`int`** to see rows affected.
-4. JPQL writes use **entity names**, not tables.
-5. Bulk/conditional writes → `@Modifying`; single entity with logic → `save()`.
+1. **UPDATE:** `save()` or `@Modifying @Query` — no derived `updateBy…`.
+2. **DELETE:** `deleteById()` or `deleteBy…()` or `@Modifying @Query`.
+3. **`@Modifying` + `@Transactional`** required for all `@Query` writes.
+4. Return **`int`/`long`** = rows affected (0 = no match).
+5. JPQL → entity names; native → table/column names.
+6. Bulk → `@Modifying`; single row + logic → `save()`.
+
+---
+
+## Write toolkit (one view)
+
+```text
+UPDATE → save()  |  @Modifying JPQL  |  @Modifying native
+DELETE → deleteById()  |  deleteBy…()  |  @Modifying JPQL/native
+ALL    → @Transactional on service
+```
 
 ---
 
 ## What's next (Day 24+)
 
-| Topic | Why |
-|-------|-----|
-| Specifications / Criteria | dynamic filters (search forms) |
-| Custom paged response DTO | stable JSON (PageImpl warning) |
-| `@DataJpaTest` | test repositories in isolation |
-| Auditing (`@CreatedDate`) | auto timestamps |
-
-Day 23 = write side of `@Query`.
+Specifications / Criteria · Custom paged DTO · `@DataJpaTest` · Auditing
 
 Ready for day review → God-level notes → Jira Done.
+
+---
+
+# Day 24 — Specifications (Dynamic Queries) 🚧 IN PROGRESS
+
+## Day 24 Objective
+
+Connect:
+
+```text
+Days 17–18 — static queries (derived, @Query — fixed WHERE)
+Day 20 — Pageable
+        ↓
+Day 24 — Specification — build WHERE at runtime from optional filters
+```
+
+Core question:
+
+> **How do I search employees when the user may send name, dept, minSalary — any combination — without 20 repository methods?**
+
+In scope:
+
+- WHY Specifications (optional filters, search forms)
+- `JpaSpecificationExecutor<EmployeeEntity>` on repository
+- `Specification<EmployeeEntity>` — lambda or static factory methods
+- Combine: `Specification.where(a).and(b)`, `and()` only when filter present
+- `findAll(Specification, Pageable)` — dynamic query + pagination
+- Criteria API basics (`Root`, `CriteriaBuilder`, `Predicate`) — via Specification
+- Service builds spec from query params; `@Transactional(readOnly=true)`
+
+Out of scope (later):
+
+- Full Criteria API without Specification wrapper
+- `@DataJpaTest`, Auditing (Day 25–26)
+- Elasticsearch / full-text search
+
+Do not start experiments until Jira ticket exists.
+
+Jira ticket: _(pending)_
+
+---
+
+# Day 24 Experiment 1 — WHY Specifications? ✅ DONE
+
+- Q1: optional/null params → can't use one fixed derived method; combinatorial explosion of method names; new filter = new methods or messy if-chains. ✅
+- Q2: JpaSpecificationExecutor adds findAll(Specification, Pageable) etc. — dynamic WHERE at runtime. ✅
+- Q3: Specification uses entity field names (name, department), not DB columns. ✅
+
+# Day 24 Experiment 2 — JpaSpecificationExecutor + EmployeeSpecs 🚧 NEXT
 
 
 
