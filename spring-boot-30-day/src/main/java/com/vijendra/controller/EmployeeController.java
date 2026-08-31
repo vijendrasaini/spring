@@ -79,7 +79,7 @@ public class EmployeeController {
 
     private Employee getEmployeeFromRequest(CreateEmployeeRequest request) {
         Employee employee = new Employee(request.getName(), request.getEmail());
-        employee.setDepartment(request.getDepartment());
+        employee.setDepartmentId(request.getDepartmentId());
         employee.setSalary(request.getSalary());
         return employee;
     }
@@ -89,7 +89,7 @@ public class EmployeeController {
                 employee.getId(),
                 employee.getName(),
                 employee.getEmail(),
-                employee.getDepartment(),
+                "",
                 employee.getSalary());
     }
 }

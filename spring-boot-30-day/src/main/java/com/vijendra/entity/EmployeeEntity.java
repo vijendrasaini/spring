@@ -90,7 +90,7 @@ public class EmployeeEntity {
 
     public Employee toEmployee() {
         Employee employee = new Employee(name, email);
-        employee.setDepartment(department == null ? "" : department.getName());
+        employee.setDepartmentId(department == null ? 0 : department.getId());
         employee.setSalary(salary);
         employee.setId(id);
         return employee;

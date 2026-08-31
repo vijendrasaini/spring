@@ -43,12 +43,12 @@ public class SpringJdbcDemo {
         System.out.println("Name : " + employee.getName());
         System.out.println("Email : " + employee.getEmail());
         System.out.println("Salary : " + employee.getSalary());
-        System.out.println("Department : " + employee.getDepartment());
+        System.out.println("Department : " + employee.getDepartmentId());
     }
 
     public static void createEmployee() {
         Employee employee = new Employee("Ramanand", "ramanad@gmail.com");
-        employee.setDepartment("TV");
+        employee.setDepartmentId(1);
         employee.setSalary(new BigDecimal("85000.33"));
 
         int id = 1; //employeeService.create(employee);
@@ -77,7 +77,7 @@ public class SpringJdbcDemo {
 
     public static void insertAndUpdate() {
         Employee employee = new Employee("Platform2", "platform2@gmail.com");
-        employee.setDepartment("Test");
+        employee.setDepartmentId(0);
         boolean isCreated = employeeService.insertAndUpdate(employee, new BigDecimal("22.89"));
         if(isCreated) {
             System.out.println("Employee created successfully with salary updated");

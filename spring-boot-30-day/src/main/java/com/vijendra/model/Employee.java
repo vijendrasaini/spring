@@ -9,7 +9,7 @@ public class Employee {
     private String name;
     private String email;
     private BigDecimal salary;
-    private String department;
+    private long departmentId;
 
     public Employee(String name, String email) {
         this.name = name;
@@ -32,8 +32,8 @@ public class Employee {
         return salary;
     }
 
-    public String getDepartment() {
-        return department;
+    public long getDepartmentId() {
+        return departmentId;
     }
 
     public void setId(int id) {
@@ -52,7 +52,7 @@ public class Employee {
         this.salary = salary;
     }
 
-    public void setDepartment(String department) {
-        this.department = department;
+    public void setDepartmentId(long departmentId) {
+        this.departmentId = departmentId;
     }
 }

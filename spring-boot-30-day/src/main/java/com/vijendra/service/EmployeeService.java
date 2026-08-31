@@ -2,6 +2,7 @@ package com.vijendra.service;
 
 import com.vijendra.annotation.LogExecution;
 import com.vijendra.dao.spring_jdbc.EmployeeDAO;
+import com.vijendra.entity.DepartmentEntity;
 import com.vijendra.entity.EmployeeEntity;
 import com.vijendra.jpa.EmployeeSpecs;
 import com.vijendra.model.Employee;
@@ -28,19 +29,26 @@ public class EmployeeService {
     private final EmployeeDAO employeeDAO;
     private final PaymentGateway paymentGateway;
     private final EmployeeRepository employeeRepository;
+    private final DepartmentService departmentService;
 
     public EmployeeService(EmployeeDAO employeeDAO, PaymentGateway paymentGateway,
-            EmployeeRepository employeeRepository) {
+            EmployeeRepository employeeRepository,
+            DepartmentService departmentService
+        ) {
         this.employeeDAO = employeeDAO;
         this.paymentGateway = paymentGateway;
         this.employeeRepository = employeeRepository;
+        this.departmentService = departmentService;
     }
 
+    @Transactional
     public Employee create(Employee employee) {
         EmployeeEntity employeeEntity = new EmployeeEntity();
         employeeEntity.setName(employee.getName());
         employeeEntity.setEmail(employee.getEmail());
-        // employeeEntity.setDepartment(employee.getDepartment());
+
+        DepartmentEntity departmentEntity = this.departmentService.getDepartment(employee.getDepartmentId());
+        employeeEntity.setDepartment(departmentEntity);
         employeeEntity.setSalary(employee.getSalary());
 
         employeeEntity = employeeRepository.save(employeeEntity);
@@ -122,7 +130,7 @@ public class EmployeeService {
 
     private Employee toEmployee(EmployeeEntity employeeEntity) {
         Employee employee = new Employee(employeeEntity.getName(), employeeEntity.getEmail());
-        employee.setDepartment(employeeEntity.getDepartment().getName());
+        employee.setDepartmentId(employeeEntity.getDepartment().getId());
         employee.setSalary(employeeEntity.getSalary());
         employee.setId(employeeEntity.getId());
         return employee;

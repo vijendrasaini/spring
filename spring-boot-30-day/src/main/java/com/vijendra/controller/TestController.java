@@ -23,7 +23,7 @@ public class TestController {
     @GetMapping("/")
     public void test() {
         Employee employee = new Employee("Test", "test@test.in");
-        employee.setDepartment("IT");
+        employee.setDepartmentId(1);
         employee.setSalary(new BigDecimal("555.55"));
         // employee = this.jpaEmployeeService.persistAndFind(employee);
 

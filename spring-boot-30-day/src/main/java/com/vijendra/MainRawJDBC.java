@@ -61,7 +61,7 @@ public class MainRawJDBC {
     public static void createEmployee(String name, String email, String department, BigDecimal salary) {
         // Create Emp
         Employee employee1 = new Employee(name, email);
-        employee1.setDepartment(department);
+        employee1.setDepartmentId(1);
         employee1.setSalary(salary);
 
         Employee employeeResult = employeeService.create(employee1);
@@ -88,7 +88,7 @@ public class MainRawJDBC {
     public static void insertAndUpdate() {
         try{
             Employee employee = new Employee("Test2", "test2@gmail.com");
-            employee.setDepartment("Test");
+            employee.setDepartmentId(1);
             boolean isCreated = employeeService.insertAndUpdate(employee, new BigDecimal("88999.89"));
             if(isCreated) {
                 System.out.println("Employee created successfully with salary updated");

@@ -24,7 +24,7 @@ public class DepartmentService {
     }
 
     @Transactional
-    public DepartmentEntity getDepartment(int id) {
+    public DepartmentEntity getDepartment(long id) {
         return this.entityManager.find(DepartmentEntity.class, id);
     }
 }

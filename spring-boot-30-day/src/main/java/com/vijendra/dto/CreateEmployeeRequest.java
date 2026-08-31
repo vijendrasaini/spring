@@ -6,6 +6,7 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
 public class CreateEmployeeRequest {
@@ -20,8 +21,8 @@ public class CreateEmployeeRequest {
     @NotNull
     private BigDecimal salary;
 
-    @NotBlank
-    private String department;
+    @Positive
+    private long departmentId;
 
     // Getters
     public String getName() {
@@ -36,8 +37,8 @@ public class CreateEmployeeRequest {
         return salary;
     }
 
-    public String getDepartment() {
-        return department;
+    public long getDepartmentId() {
+        return departmentId;
     }
 
     // setters
@@ -53,7 +54,7 @@ public class CreateEmployeeRequest {
         this.salary = salary;
     }
 
-    public void setDepartment(String department) {
-        this.department = department;
+    public void setDepartmentId(int departmentId) {
+        this.departmentId = departmentId;
     }
 }

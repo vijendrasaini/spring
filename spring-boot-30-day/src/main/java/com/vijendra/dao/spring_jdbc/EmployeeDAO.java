@@ -52,7 +52,7 @@ public class EmployeeDAO {
                     ps.setString(1, employee.getName());
                     ps.setString(2, employee.getEmail());
                     ps.setBigDecimal(3, employee.getSalary());
-                    ps.setString(4, employee.getDepartment());
+                    ps.setInt(4, 1);
 
                     return ps;
                 },
@@ -121,7 +121,7 @@ public class EmployeeDAO {
                         ps.setString(1, employee.getName());
                         ps.setString(2, employee.getEmail());
                         ps.setBigDecimal(3, BigDecimal.ZERO);
-                        ps.setString(4, employee.getDepartment());
+                        ps.setInt(4, 1);
 
                         return ps;
                     },
@@ -179,7 +179,7 @@ public class EmployeeDAO {
                     ps.setString(1, employee.getName());
                     ps.setString(2, employee.getEmail());
                     ps.setBigDecimal(3, BigDecimal.ZERO);
-                    ps.setString(4, employee.getDepartment());
+                    ps.setInt(4, 1);
 
                     return ps;
                 },
@@ -222,7 +222,7 @@ public class EmployeeDAO {
 
             employee.setId(resultSet.getInt("id"));
             employee.setSalary(resultSet.getBigDecimal("salary"));
-            employee.setDepartment(resultSet.getString("department"));
+            employee.setDepartmentId(1);
 
             return employee;
         };

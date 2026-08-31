@@ -33,7 +33,7 @@ public class EmployeeDAO {
             ps.setString(1, employee.getName());
             ps.setString(2, employee.getEmail());
             ps.setBigDecimal(3, employee.getSalary());
-            ps.setString(4, employee.getDepartment());
+            ps.setInt(4, 1);
 
             int rowsAffected = ps.executeUpdate();
             if(rowsAffected == 1) {
@@ -144,7 +144,7 @@ public class EmployeeDAO {
         Employee employee = new Employee(rs.getString("name"), rs.getString("email"));
 
         employee.setSalary(rs.getBigDecimal("salary"));
-        employee.setDepartment(rs.getString("department"));
+        employee.setDepartmentId(1);
         employee.setId(rs.getInt("id"));
         return employee;
     }
@@ -169,7 +169,7 @@ public class EmployeeDAO {
                 ps.setString(1, employee.getName());
                 ps.setString(2, employee.getEmail());
                 ps.setBigDecimal(3, employee.getSalary());
-                ps.setString(4, employee.getDepartment());
+                ps.setInt(4, 1);
 
                 int rowsAffected = ps.executeUpdate();
                 if(rowsAffected == 1) {
