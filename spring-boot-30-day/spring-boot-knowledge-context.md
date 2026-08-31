@@ -54,6 +54,12 @@ How a day starts:
 
 Do not start teaching a new day before the Jira ticket exists.
 
+Agent / Cursor rules:
+
+- When updating this project via Cursor: **only edit this `.md` file** — never Java, config, or other source files unless I explicitly ask otherwise.
+- Every completed day must be recorded here in the same format as prior days: objective → experiments (with observations) → God-level notes → hard rules → what's next.
+- Do not skip experiment sections or God-level notes when a day is marked done.
+
 ---
 
 # Project
@@ -5260,7 +5266,7 @@ Ready for day review → God-level notes → Jira Done.
 
 ---
 
-# Day 24 — Specifications (Dynamic Queries) 🚧 IN PROGRESS
+# Day 24 — Specifications (Dynamic Queries) ✅ DONE
 
 ## Day 24 Objective
 
@@ -5282,10 +5288,11 @@ In scope:
 - WHY Specifications (optional filters, search forms)
 - `JpaSpecificationExecutor<EmployeeEntity>` on repository
 - `Specification<EmployeeEntity>` — lambda or static factory methods
-- Combine: `Specification.where(a).and(b)`, `and()` only when filter present
+- Combine: chain `.and(...)`, if-blocks, or `Specification.allOf(list)`
 - `findAll(Specification, Pageable)` — dynamic query + pagination
 - Criteria API basics (`Root`, `CriteriaBuilder`, `Predicate`) — via Specification
 - Service builds spec from query params; `@Transactional(readOnly=true)`
+- HTTP search endpoint: `GET /employees/search`
 
 Out of scope (later):
 
@@ -5295,49 +5302,325 @@ Out of scope (later):
 
 Do not start experiments until Jira ticket exists.
 
-Jira ticket: _(pending)_
+Jira ticket: created.
 
 ---
 
 # Day 24 Experiment 1 — WHY Specifications? ✅ DONE
 
 - Q1: optional/null params → can't use one fixed derived method; combinatorial explosion of method names; new filter = new methods or messy if-chains. ✅
-- Q2: JpaSpecificationExecutor adds findAll(Specification, Pageable) etc. — dynamic WHERE at runtime. ✅
-- Q3: Specification uses entity field names (name, department), not DB columns. ✅
+- Q2: `JpaSpecificationExecutor` adds `findAll(Specification, Pageable)` etc. — dynamic WHERE at runtime. ✅
+- Q3: Specification uses entity field names (`name`, `department`), not DB columns. ✅
 
-# Day 24 Experiment 2 — JpaSpecificationExecutor + EmployeeSpecs 🚧 NEXT
+# Day 24 Experiment 2 — JpaSpecificationExecutor + EmployeeSpecs ✅ DONE
 
+- Extended `EmployeeRepository` with `JpaSpecificationExecutor<EmployeeEntity>`.
+- Created `EmployeeSpecs` with static factories: `nameContains`, `departmentName`, `salaryGreaterThan`.
+- Runner: chained specs with `.and(...)` — all three filters combined in one query.
+- Observed SQL: JOIN departments + `lower(name) like ?` + `d.name=?` + `salary>?`.
+- Pitfall 1: `Specification` is **immutable** — `spec.and(x)` without reassignment/chaining does nothing.
+- Pitfall 2: typo in LIKE pattern (`"%d"` instead of `"%"`) → SQL shape correct but bind value wrong → 0 rows while manual SQL returns 1.
+- Pitfall 3: avoid `Specification.where(null)` — ambiguous in Spring Data 4; chain directly or use `allOf`.
 
+# Day 24 Experiment 3 — Optional filters in service ✅ DONE
 
+- Service builds spec only when param is present (`null` / blank skipped).
+- Used `List<Specification>` + `Specification.allOf(specs)` — clean when filters are optional.
+- Alternative: if-blocks with `spec = spec == null ? first : spec.and(next)`.
+- Empty list → `allOf([])` = unrestricted → all employees (still paginated).
 
+# Day 24 Experiment 4 — HTTP search endpoint ✅ DONE
 
+- `GET /employees/search?name=&department=&minSalary=&page=&size=&sort=`
+- Controller: `@RequestParam(required = false)` on each filter + `Pageable`.
+- Service: `@Transactional(readOnly = true)` + `findAll(finalSpec, pageable).map(toEmployee)`.
+- Verified: Hibernate SQL matches manual JOIN + dynamic WHERE per param combination.
+- Route `/employees/search` does not clash with `/employees/{id}` (literal path vs int id).
 
+---
 
+# Day 24 — God-Level Notes (Notebook)
 
+## Why Specifications?
 
+Static queries fail when filters are optional:
 
+```text
+findByName
+findByDepartment_Name
+findByNameAndDepartment_NameAndSalaryGreaterThan
+… → combinatorial explosion
+```
 
+Specifications = **build WHERE at runtime** from optional filters (search forms, admin filters, report params).
 
+---
 
+## Stack (three pieces)
 
+| Piece | Role |
+|-------|------|
+| `JpaSpecificationExecutor<T>` on repository | Adds `findAll(Spec, Pageable)`, `count(Spec)`, etc. |
+| `Specification<T>` | Lambda/factory returning `Predicate` |
+| `EmployeeSpecs` (static factories) | Reusable, testable filter methods |
 
+```java
+public interface EmployeeRepository
+        extends JpaRepository<EmployeeEntity, Integer>, JpaSpecificationExecutor<EmployeeEntity> { }
+```
 
+---
 
+## Criteria API via Specification
 
+Each spec receives `(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder cb)`:
 
+| API | Example in our project |
+|-----|------------------------|
+| `root.get("name")` | employee name field |
+| `root.get("department").get("name")` | join path to dept name |
+| `cb.like(cb.lower(...), pattern)` | case-insensitive name search |
+| `cb.equal(...)` | exact dept name match |
+| `cb.greaterThan(...)` | salary > min |
 
+`departmentName` spec → Hibernate generates **JOIN departments** (same as manual SQL).
 
+---
 
+## EmployeeSpecs pattern
 
+```java
+public static Specification<EmployeeEntity> nameContains(String name) {
+    return (root, query, cb) ->
+        cb.like(cb.lower(root.get("name")), "%" + name.toLowerCase() + "%");
+}
 
+public static Specification<EmployeeEntity> departmentName(String deptName) {
+    return (root, query, cb) ->
+        cb.equal(root.get("department").get("name"), deptName);
+}
 
+public static Specification<EmployeeEntity> salaryGreaterThan(BigDecimal min) {
+    return (root, query, cb) ->
+        cb.greaterThan(root.get("salary"), min);
+}
+```
 
+Field names = **entity** names, not DB columns.
 
+---
 
+## Combining specs (three valid styles)
 
+**1. Chain (all filters always present — runner / fixed search):**
 
+```java
+EmployeeSpecs.nameContains("Vijendra")
+    .and(EmployeeSpecs.departmentName("IT"))
+    .and(EmployeeSpecs.salaryGreaterThan(new BigDecimal("100")));
+```
 
+**2. If-blocks (optional params):**
 
+```java
+Specification<EmployeeEntity> spec = null;
+if (name != null && !name.isBlank()) {
+    spec = spec == null ? EmployeeSpecs.nameContains(name) : spec.and(EmployeeSpecs.nameContains(name));
+}
+// repeat for dept, minSalary
+```
+
+**3. `Specification.allOf(list)` (optional params — what we used):**
+
+```java
+List<Specification<EmployeeEntity>> specs = new ArrayList<>();
+if (name != null && !name.isBlank()) specs.add(EmployeeSpecs.nameContains(name));
+if (dept != null && !dept.isBlank()) specs.add(EmployeeSpecs.departmentName(dept));
+if (minSalary != null) specs.add(EmployeeSpecs.salaryGreaterThan(minSalary));
+Specification<EmployeeEntity> finalSpec = Specification.allOf(specs);
+```
+
+**Immutable rule:** `spec.and(x)` returns a **new** spec — must chain or reassign.
+
+**Avoid:** `Specification.where(null)` — compile/ambiguity issues in Spring Data 4.
+
+---
+
+## Repository + service + controller
+
+```java
+// repo
+Page<EmployeeEntity> findAll(Specification<EmployeeEntity> spec, Pageable pageable);
+
+// service
+@Transactional(readOnly = true)
+public Page<Employee> searchEmployees(String name, String dept, BigDecimal minSalary, Pageable pageable) {
+    // build finalSpec from optional params
+    return employeeRepository.findAll(finalSpec, pageable).map(this::toEmployee);
+}
+
+// controller
+@GetMapping("/search")
+public Page<EmployeeResponse> searchEmployees(
+        @RequestParam(required = false) String name,
+        @RequestParam(required = false) String department,
+        @RequestParam(required = false) BigDecimal minSalary,
+        Pageable pageable) { ... }
+```
+
+`findAll(null, pageable)` or `allOf([])` → no WHERE → all rows (paginated).
+
+---
+
+## vs other query styles
+
+| Need | Use |
+|------|-----|
+| Fixed query, no optional filters | derived method / `@Query` |
+| Optional search filters | **Specification** |
+| Bulk UPDATE/DELETE | `@Modifying` (Day 23) |
+| Eager fetch on paginated search | `@EntityGraph` on `findAll(Spec, Pageable)` (Day 21) |
+
+Spec defines **filter** (WHERE). EntityGraph defines **fetch plan** (JOIN for load). Can combine both on same repo method.
+
+---
+
+## Observed SQL
+
+**All three filters:**
+
+```sql
+select ee..., ee1_0.salary
+from employees ee1_0
+join departments d1_0 on d1_0.id = ee1_0.department_id
+where lower(ee1_0.name) like ? and d1_0.name = ? and ee1_0.salary > ?
+```
+
+**One filter only** → only that predicate appears in WHERE.
+
+**No filters** → SELECT all employees + count query for `Page<T>`.
+
+---
+
+## Pitfalls we hit
+
+| Pitfall | Symptom | Fix |
+|---------|---------|-----|
+| `%d` typo in LIKE | Manual SQL 1 row, app 0 rows | `"%" + name + "%"` not `"%d"` |
+| `spec.and(x)` without chain | Only first filter in SQL | chain or reassign |
+| Wrong spec for param | dept filter searches name | use `departmentName(dept)` not `nameContains(dept)` |
+| `where(null)` | won't compile / ambiguous | chain or `allOf` |
+
+---
+
+## Decision tree
+
+```text
+All filters always required?
+├─ Yes → derived method or @Query
+└─ No (optional / search API)
+    ├─ JpaSpecificationExecutor on repo
+    ├─ Static spec factories (EmployeeSpecs)
+    ├─ Service builds spec from @RequestParam
+    ├─ findAll(spec, pageable)
+    ├─ @Transactional(readOnly=true)
+    └─ @EntityGraph on findAll(Spec, Pageable) if mapping touches lazy associations
+```
+
+---
+
+## Hard rules (memorize)
+
+1. **Optional filters** → Specifications, not 20 derived method names.
+2. Spec paths = **entity field names** (`department.name`), not table/column names.
+3. **`Specification` is immutable** — chain `.and()` or use `allOf`.
+4. **Search + pagination** → `findAll(spec, pageable)` — don't add LIMIT/OFFSET manually.
+5. **`@Transactional(readOnly = true)`** on search/read service methods.
+6. Match **spec to param** — name → `nameContains`, dept → `departmentName`, salary → `salaryGreaterThan`.
+7. Empty spec / empty `allOf` → unrestricted query (all rows, paginated).
+
+---
+
+## What we proved
+
+| Test | Result |
+|------|--------|
+| Chained 3 specs in runner | 1 row: Vijendra, IT, salary > 100 |
+| `GET /search?name=Vijendra&department=IT&minSalary=100` | Same SQL as manual query |
+| Single param | Only that WHERE clause |
+| No params | Paginated full list |
+| LIKE typo fix | App result matches SQL client |
+
+---
+
+## What's next (Day 25+)
+
+| Topic | Why |
+|-------|-----|
+| JPA Auditing (`@CreatedDate`, `@LastModifiedDate`) | auto timestamps on persist/update |
+| `@EnableJpaAuditing` | turn on auditing |
+| `@DataJpaTest` (Day 26) | slice test for repositories |
+
+Day 24 = dynamic WHERE at runtime without combinatorial repository methods.
+
+Ready for day review → God-level notes → Jira Done.
+
+---
+
+# Day 25 — JPA Auditing (`@CreatedDate` / `@LastModifiedDate`) 🚧 IN PROGRESS
+
+## Day 25 Objective
+
+Connect:
+
+```text
+Days 1–24 — entities, repos, save/update, search
+        ↓
+Day 25 — JPA Auditing — auto-set createdAt / updatedAt on persist & update
+```
+
+Core question:
+
+> **Who sets `createdAt` and `updatedAt` — the developer in every service method, or the persistence layer automatically?**
+
+In scope:
+
+- WHY auditing (consistency, no forgotten timestamps, audit trail basics)
+- `@EntityListeners(AuditingEntityListener.class)` on entity
+- `@CreatedDate`, `@LastModifiedDate` on fields
+- `@EnableJpaAuditing` on config / main application class
+- `AuditorAware<String>` — optional `createdBy` / `lastModifiedBy` (who did it)
+- `LocalDateTime` vs `Instant` for audit columns
+- DB migration: add `created_at`, `updated_at` columns to `employees`
+- Observe: INSERT sets both; UPDATE changes only `updatedAt`
+- `@Transactional` on save/update (auditing runs inside persistence lifecycle)
+
+Out of scope (later):
+
+- `@DataJpaTest` slice tests (Day 26)
+- Envers / full revision history
+- Custom `@PrePersist` / `@PreUpdate` (contrast only — prefer auditing for timestamps)
+
+Do not start experiments until Jira ticket exists.
+
+Jira ticket: created.
+
+---
+
+# Day 25 Experiment 1 — WHY JPA Auditing? ✅ DONE
+
+- Q1: manual set in every service → human error, inconsistent across team/services, easy to forget in prod. ✅
+- Q2: entity fields + DB columns needed — but also `@EntityListeners(AuditingEntityListener.class)` on entity and `@EnableJpaAuditing` at app/config level (not just annotations on fields). ✅ (partial — completed in notes)
+- Q3: UPDATE → only `updatedAt` changes; `createdAt` stays frozen from INSERT. ✅
+
+# Day 25 Experiment 2 — DB columns + entity annotations ✅ DONE
+
+- Added `created_at`, `updated_at` to `employees` (MySQL).
+- `EmployeeEntity`: `LocalDateTime createdAt`, `updatedAt` + `@CreatedDate`, `@LastModifiedDate`.
+- `@EntityListeners(AuditingEntityListener.class)` on entity class.
+- Before `@EnableJpaAuditing`: INSERT failed — `created_at` null → `SQLIntegrityConstraintViolationException` (expected; listener/auditing not fully active yet, or columns NOT NULL with no value set).
+
+# Day 25 Experiment 3 — @EnableJpaAuditing + prove INSERT/UPDATE 🚧 NEXT
 
 
 

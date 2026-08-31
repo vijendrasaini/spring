@@ -150,12 +150,12 @@ public class JpaLearningRunner implements CommandLineRunner {
 
         // specifications
         // Specification<EmployeeEntity> spec = Specification.where(null);
-        Specification<EmployeeEntity> spec = EmployeeSpecs.nameContains("Vijendra")
+        // Specification<EmployeeEntity> spec = EmployeeSpecs.nameContains("Vijendra")
         // .and(EmployeeSpecs.departmentName("IT"))
-        .and(EmployeeSpecs.salaryGreaterThan(new BigDecimal("100.00")));
+        // .and(EmployeeSpecs.salaryGreaterThan(new BigDecimal("100.00")));
 
-        List<EmployeeEntity> employeeEntities = employeeRepository.findAll(spec);
-        employeeEntities.stream().forEach(ee -> System.out.println(ee.getId() + " | " + ee.getName()));
+        // List<EmployeeEntity> employeeEntities = employeeRepository.findAll(spec);
+        // employeeEntities.stream().forEach(ee -> System.out.println(ee.getId() + " | " + ee.getName()));
 
         System.out.println("=== JPA Learning Runner end ===");
     }

@@ -1,10 +1,16 @@
 package com.vijendra.entity;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import com.vijendra.model.Employee;
 
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -21,6 +27,7 @@ import jakarta.persistence.Table;
     name = "Employee.withDepartment",
     attributeNodes = @NamedAttributeNode("department")
 )
+@EntityListeners(AuditingEntityListener.class)
 public class EmployeeEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -35,6 +42,11 @@ public class EmployeeEntity {
     private DepartmentEntity department;
 
     private BigDecimal salary;
+
+    @CreatedDate
+    private LocalDateTime createdAt;
+    @LastModifiedDate
+    private LocalDateTime updatedAt;
 
     public int getId() {
         return id;
