@@ -5796,3 +5796,62 @@ Need createdAt / updatedAt on entity?
 Day 25 = automatic **when** on persist/update — persistence layer, not scattered service code.
 
 Ready for day review → God-level notes → Jira Done.
+
+---
+
+# Day 26 — `@DataJpaTest` (Repository Slice Tests) 🚧 IN PROGRESS
+
+## Day 26 Objective
+
+Connect:
+
+```text
+Days 17–25 — repositories, queries, specs, auditing
+        ↓
+Day 26 — @DataJpaTest — test repository layer in isolation (fast, focused)
+```
+
+Core question:
+
+> **How do I test `EmployeeRepository` without starting the full Spring Boot app, Tomcat, controllers, and every other bean?**
+
+In scope:
+
+- WHY slice tests vs `@SpringBootTest` (speed, focus, less flakiness)
+- Add `spring-boot-starter-test` dependency
+- `@DataJpaTest` — loads only JPA + repo + in-memory DB (H2 for tests)
+- `@Autowired EmployeeRepository` + `TestEntityManager` (optional)
+- Test: save + findById, derived query (`findByEmail`), custom `@Query`
+- `@AutoConfigureTestDatabase` / `application-test.properties` for H2
+- `@Transactional` on test class — rolls back after each test (default)
+- Assert on entity fields; verify auditing fields if applicable
+
+Out of scope (later):
+
+- `@WebMvcTest` (controller slice)
+- `@MockBean` service layer
+- Testcontainers + real MySQL in CI
+- Integration tests across full stack
+
+Do not start experiments until Jira ticket exists.
+
+Jira ticket: created.
+
+**Learner note:** zero prior testing experience — Day 26 starts from basics; Mockito not required for `@DataJpaTest` repo tests.
+
+---
+
+# Day 26 Experiment 1 — WHY @DataJpaTest? ✅ DONE
+
+- Q1: `@SpringBootTest` boots entire app (all modules) → slow, wasteful when only testing repo/DB layer. ✅
+- Q2: **Not loaded:** Tomcat, controllers, services. **Loaded:** JPA config, repositories, test DB (H2). ✅
+- Q3: cleaned up automatically — `@DataJpaTest` wraps each test in `@Transactional` + **rolls back** after test; data doesn't leak to next test. Can disable with `@Commit` / `@Rollback(false)` if needed. ✅
+
+# Day 26 Experiment 2 — test dependency + H2 config ✅ DONE
+
+- Added `spring-boot-starter-test` + `h2` (`scope=test`) to `pom.xml`.
+- Created `application-test.properties` (H2 in-memory, `ddl-auto=create-drop`, H2Dialect).
+- `mvn test` → BUILD SUCCESS (0 tests yet — expected).
+- Note: file in `src/main/resources/application-test.properties` works with `@ActiveProfiles("test")`; common alternative is `src/test/resources/` (either is fine).
+
+# Day 26 Experiment 3 — first @DataJpaTest (save + findById) 🚧 NEXT
