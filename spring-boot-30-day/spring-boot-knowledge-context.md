@@ -5799,7 +5799,7 @@ Ready for day review → God-level notes → Jira Done.
 
 ---
 
-# Day 26 — `@DataJpaTest` (Repository Slice Tests) 🚧 IN PROGRESS
+# Day 26 — `@DataJpaTest` (Repository Slice Tests) ✅ DONE
 
 ## Day 26 Objective
 
@@ -5818,18 +5818,18 @@ Core question:
 In scope:
 
 - WHY slice tests vs `@SpringBootTest` (speed, focus, less flakiness)
-- Add `spring-boot-starter-test` dependency
+- Add `spring-boot-starter-data-jpa-test` + H2 (`scope=test`)
 - `@DataJpaTest` — loads only JPA + repo + in-memory DB (H2 for tests)
-- `@Autowired EmployeeRepository` + `TestEntityManager` (optional)
-- Test: save + findById, derived query (`findByEmail`), custom `@Query`
-- `@AutoConfigureTestDatabase` / `application-test.properties` for H2
+- `@Autowired EmployeeRepository` + `EntityManager` / `TestEntityManager` for setup
+- Test: save + findById, derived query (`findByEmail`), custom `@Query` JPQL
+- `@ActiveProfiles("test")` + `application-test.properties` for H2
 - `@Transactional` on test class — rolls back after each test (default)
-- Assert on entity fields; verify auditing fields if applicable
+- AAA pattern: Arrange → Act → Assert
 
 Out of scope (later):
 
 - `@WebMvcTest` (controller slice)
-- `@MockBean` service layer
+- `@MockBean` / Mockito service tests
 - Testcontainers + real MySQL in CI
 - Integration tests across full stack
 
@@ -5849,10 +5849,11 @@ Jira ticket: created.
 
 # Day 26 Experiment 2 — test dependency + H2 config ✅ DONE
 
-- Added `spring-boot-starter-test` + `h2` (`scope=test`) to `pom.xml`.
+- Added `spring-boot-starter-data-jpa-test` + `h2` (`scope=test`) to `pom.xml`.
+- `spring-boot-starter-data-jpa-test` transitively includes `spring-boot-starter-test` (JUnit, assertions) — no need for both explicitly.
 - Created `application-test.properties` (H2 in-memory, `ddl-auto=create-drop`, H2Dialect).
 - `mvn test` → BUILD SUCCESS (0 tests yet — expected).
-- Note: file in `src/main/resources/application-test.properties` works with `@ActiveProfiles("test")`; common alternative is `src/test/resources/` (either is fine).
+- Note: file in `src/main/resources/application-test.properties` works with `@ActiveProfiles("test")`; common alternative is `src/test/resources/`.
 - **Spring Boot 4 gotcha:** `spring-boot-starter-test` alone does NOT include `@DataJpaTest` — add `spring-boot-starter-data-jpa-test` and use import `org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest` (not `...test.autoconfigure.orm.jpa...`).
 
 # Day 26 Experiment 3 — first @DataJpaTest (save + findById) ✅ DONE
@@ -5862,4 +5863,253 @@ Jira ticket: created.
 - `mvn test` → Tests run: 1, BUILD SUCCESS.
 - Observed: slice context logs (Hibernate, H2, repo scan) — no Tomcat/controllers (expected).
 
-# Day 26 Experiment 4 — derived query test (`findByEmail`) 🚧 NEXT
+# Day 26 Experiment 4 — derived query test (`findByEmail`) ✅ DONE
+
+- Added `shouldFindEmployeeByEmail` — save → `findByEmail` → assert name + email. ✅
+- Proves Spring Data **derived query** works without `@Query`.
+
+# Day 26 Experiment 5 — custom `@Query` test (JPQL) ✅ DONE
+
+- Setup: `DepartmentEntity` + 2 employees via `EntityManager.persist()` + `flush()`.
+- Test: `findEmployeesByDepartmentNameAndSalaryAbove("IT", 100)` → 1 row (high earner only). ✅
+- `mvn test` → Tests run: 3, BUILD SUCCESS.
+
+---
+
+# Day 26 — God-Level Notes (Notebook)
+
+## Why `@DataJpaTest`?
+
+Repository logic (save, derived queries, `@Query`) must work against a real DB. Starting the full app for every test is:
+
+- **slow** (Tomcat, all beans)
+- **brittle** (unrelated beans can break repo tests)
+- **overkill** (controllers/services not under test)
+
+**`@DataJpaTest`** = slice test — only JPA + repositories + embedded H2.
+
+---
+
+## `@SpringBootTest` vs `@DataJpaTest`
+
+| | `@SpringBootTest` | `@DataJpaTest` |
+|---|-------------------|----------------|
+| Loads | Full application | JPA slice only |
+| Tomcat | Yes | No |
+| Controllers / services | Yes | No |
+| Repositories + JPA | Yes | Yes |
+| DB | Configurable (often Testcontainers) | Embedded H2 by default |
+| Speed | Slow | Fast |
+| Use for | End-to-end integration | Repository / query tests |
+
+---
+
+## Spring Boot 4 — test dependencies (memorize)
+
+| Boot 3 | Boot 4 |
+|--------|--------|
+| `spring-boot-starter-test` includes `@DataJpaTest` | JPA test slice = **separate** starter |
+| import `...test.autoconfigure.orm.jpa.DataJpaTest` | import `org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest` |
+
+**Minimal for repo tests:**
+
+```xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-data-jpa-test</artifactId>
+    <scope>test</scope>
+</dependency>
+<dependency>
+    <groupId>com.h2database</groupId>
+    <artifactId>h2</artifactId>
+    <scope>test</scope>
+</dependency>
+```
+
+`spring-boot-starter-data-jpa-test` **transitively includes** `spring-boot-starter-test`.
+
+---
+
+## Test class skeleton
+
+```java
+@DataJpaTest
+@ActiveProfiles("test")
+class EmployeeRepositoryTest {
+
+    @Autowired
+    private EmployeeRepository employeeRepository;
+
+    @Autowired
+    private EntityManager entityManager; // or TestEntityManager
+
+    @Test
+    void shouldSaveAndFindEmployeeById() { ... }
+}
+```
+
+| Annotation | Role |
+|------------|------|
+| `@DataJpaTest` | JPA slice context |
+| `@ActiveProfiles("test")` | Load `application-test.properties` (H2) |
+| `@Autowired EmployeeRepository` | Real repo bean under test |
+| `@Test` | JUnit — marks test method |
+| `@Autowired EntityManager` | Direct persist for setup (dept, etc.) |
+
+---
+
+## AAA pattern (every test)
+
+```text
+Arrange  →  create + persist test data
+Act      →  call repository method
+Assert   →  assertEquals / assertTrue / assertFalse
+```
+
+Example assertions:
+
+```java
+assertTrue(found.isPresent());
+assertEquals("expected", found.get().getName());
+assertEquals(1, result.size());
+```
+
+---
+
+## What we tested (3 tests)
+
+| Test | What it proves |
+|------|----------------|
+| `shouldSaveAndFindEmployeeById` | `save()` + `findById()` basic CRUD |
+| `shouldFindEmployeeByEmail` | derived query `findByEmail` |
+| `shouldFindEmployeesByDepartmentAndMinSalary_usingJpqlQuery` | custom `@Query` JPQL + JOIN + filter |
+
+---
+
+## Setup with `EntityManager` / `TestEntityManager`
+
+When test data needs entities without a dedicated repo (e.g. `DepartmentEntity`):
+
+```java
+DepartmentEntity dept = new DepartmentEntity();
+dept.setName("IT");
+entityManager.persist(dept);
+
+EmployeeEntity emp = new EmployeeEntity();
+emp.setDepartment(dept);
+entityManager.persist(emp);
+
+entityManager.flush(); // ensure visible before repository query
+```
+
+`TestEntityManager` is a Spring Boot test wrapper around `EntityManager` — either works in `@DataJpaTest`.
+
+---
+
+## `mvn test` lifecycle
+
+```text
+compile main → test-compile → run @Test methods → report pass/fail
+```
+
+- Does **not** start Tomcat or run the app on 8080
+- Slice context still logs Hibernate/H2 startup — **expected** (not zero logs)
+- Result line: `Tests run: 3, Failures: 0, BUILD SUCCESS`
+
+---
+
+## Test DB vs production DB
+
+| | Production (`application.properties`) | Tests (`application-test.properties`) |
+|---|--------------------------------------|---------------------------------------|
+| DB | MySQL `spring_boot_30_days` | H2 in-memory |
+| Needs HeidiSQL running | Yes | **No** |
+| Data | Real / persistent | Created per test run, rolled back per test |
+
+`@DataJpaTest` may replace DataSource with embedded H2 even when profile is active — tests stay isolated from MySQL.
+
+---
+
+## Rollback per test (default)
+
+`@DataJpaTest` is `@Transactional` → each test rolls back at end → tests don't pollute each other.
+
+To keep data (rare): `@Commit` or `@Rollback(false)` on that test method.
+
+---
+
+## Hard rules (memorize)
+
+1. **Repo tests** → `@DataJpaTest`, not `@SpringBootTest`.
+2. **Boot 4:** `spring-boot-starter-data-jpa-test` + new import path for `@DataJpaTest`.
+3. **`@ActiveProfiles("test")`** → H2 config, not MySQL.
+4. **AAA** in every test — Arrange, Act, Assert.
+5. **No Mockito** needed for repo slice tests — real repo + real H2.
+6. **`entityManager.persist` + `flush`** when setup needs entities beyond autowired repos.
+7. **`mvn test`** = run tests; **`mvn spring-boot:run`** = start app — different commands.
+
+---
+
+## Decision tree
+
+```text
+What are you testing?
+├─ Repository / @Query / derived method → @DataJpaTest + H2
+├─ Controller / HTTP / JSON → @WebMvcTest (later)
+├─ Service with mocked deps → @ExtendWith(MockitoExtension) / @MockBean (later)
+└─ Full flow (API → DB → response) → @SpringBootTest (later, slow)
+```
+
+---
+
+## What's next (Day 27+)
+
+| Topic | Why |
+|-------|-----|
+| `@WebMvcTest` | controller slice — MockMvc |
+| Mockito / `@MockBean` | service unit tests |
+| Testcontainers | real MySQL in CI |
+| `@SpringBootTest` | full integration when needed |
+
+Day 26 = first automated tests — repository layer, fast, no mocks, no full app.
+
+Ready for day review → God-level notes → Jira Done.
+
+---
+
+# Day 27 — `@WebMvcTest` (Controller Slice + MockMvc) 🚧 IN PROGRESS
+
+## Day 27 Objective
+
+Connect:
+
+```text
+Day 26 — @DataJpaTest (repository layer, real DB, no mocks)
+        ↓
+Day 27 — @WebMvcTest — test HTTP layer (controller) in isolation with mocked service
+```
+
+Core question:
+
+> **How do I test `GET /employees/{id}` returns correct JSON/status without starting the full app or hitting a real database?**
+
+In scope:
+
+- WHY `@WebMvcTest` vs `@DataJpaTest` vs `@SpringBootTest`
+- Add `spring-boot-starter-webmvc-test` (Spring Boot 4)
+- `@WebMvcTest(EmployeeController.class)` — controller slice only
+- `@MockBean` EmployeeService — controller's dependency faked
+- `MockMvc` — simulate HTTP requests (`get`, `post`, `status`, `jsonPath`)
+- Test: `GET /employees/{id}` → 200 + JSON body
+- Test: validation error or not-found status (optional)
+- Boot 4 import: `org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest`
+
+Out of scope (later):
+
+- `@SpringBootTest` + real DB end-to-end
+- Testcontainers
+- Security tests (`@WithMockUser`)
+
+Do not start experiments until Jira ticket exists.
+
+Jira ticket: _(pending)_
