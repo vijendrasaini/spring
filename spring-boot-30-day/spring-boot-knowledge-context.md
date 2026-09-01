@@ -5853,5 +5853,13 @@ Jira ticket: created.
 - Created `application-test.properties` (H2 in-memory, `ddl-auto=create-drop`, H2Dialect).
 - `mvn test` → BUILD SUCCESS (0 tests yet — expected).
 - Note: file in `src/main/resources/application-test.properties` works with `@ActiveProfiles("test")`; common alternative is `src/test/resources/` (either is fine).
+- **Spring Boot 4 gotcha:** `spring-boot-starter-test` alone does NOT include `@DataJpaTest` — add `spring-boot-starter-data-jpa-test` and use import `org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest` (not `...test.autoconfigure.orm.jpa...`).
 
-# Day 26 Experiment 3 — first @DataJpaTest (save + findById) 🚧 NEXT
+# Day 26 Experiment 3 — first @DataJpaTest (save + findById) ✅ DONE
+
+- `EmployeeRepositoryTest` with `@DataJpaTest` + `@ActiveProfiles("test")`.
+- Test: save employee → `findById` → assert name + email. ✅
+- `mvn test` → Tests run: 1, BUILD SUCCESS.
+- Observed: slice context logs (Hibernate, H2, repo scan) — no Tomcat/controllers (expected).
+
+# Day 26 Experiment 4 — derived query test (`findByEmail`) 🚧 NEXT
