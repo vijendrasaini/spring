@@ -11,6 +11,7 @@ import com.vijendra.repository.EmployeeRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -68,6 +69,7 @@ public class EmployeeService {
         // return employeeDAO.get(employeeId);
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     public boolean deleteEmployee(int employeeId) {
         employeeRepository.deleteById(employeeId);
         return true;

@@ -6077,7 +6077,7 @@ Ready for day review → God-level notes → Jira Done.
 
 ---
 
-# Day 27 — `@WebMvcTest` (Controller Slice + MockMvc) 🚧 IN PROGRESS
+# Day 27 — `@WebMvcTest` (Controller Slice + MockMvc) ✅ DONE
 
 ## Day 27 Objective
 
@@ -6098,18 +6098,590 @@ In scope:
 - WHY `@WebMvcTest` vs `@DataJpaTest` vs `@SpringBootTest`
 - Add `spring-boot-starter-webmvc-test` (Spring Boot 4)
 - `@WebMvcTest(EmployeeController.class)` — controller slice only
-- `@MockBean` EmployeeService — controller's dependency faked
-- `MockMvc` — simulate HTTP requests (`get`, `post`, `status`, `jsonPath`)
+- `@MockitoBean` EmployeeService — controller's dependency faked
+- `MockMvc` — simulate HTTP requests (`get`, `status`, `jsonPath`)
 - Test: `GET /employees/{id}` → 200 + JSON body
-- Test: validation error or not-found status (optional)
 - Boot 4 import: `org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest`
 
-Out of scope (later):
+Out of scope (done in notes only, not implemented):
 
+- POST validation → 400 test (`mockMvc.perform(post(...))`)
+- `@Import(GlobalExceptionHandler.class)` for exception handler in slice
 - `@SpringBootTest` + real DB end-to-end
-- Testcontainers
-- Security tests (`@WithMockUser`)
+- Testcontainers / Security tests
 
 Do not start experiments until Jira ticket exists.
 
-Jira ticket: _(pending)_
+Jira ticket: created.
+
+---
+
+# Day 27 Experiment 1 — WHY @WebMvcTest? ✅ DONE
+
+- Q1: API test ≠ full stack controller→repo in slice test. `@WebMvcTest` tests **controller/web layer only**; service is **mocked** — that's the point of a slice. Full stack = `@SpringBootTest` (later). ✅
+- Q2: **Don't use real `EmployeeService`** in `@WebMvcTest` — use `@MockitoBean` to fake it. Real service pulls in repo, DAO, DB → integration test, not controller slice. ✅
+- Q3: `MockMvc` simulates HTTP requests against the controller (in-process) — status, headers, JSON — without starting full app on 8080. ✅
+
+# Day 27 Experiment 2 — webmvc-test dependency + skeleton ✅ DONE
+
+- Added `spring-boot-starter-webmvc-test` to `pom.xml`.
+- Boot 4: `@MockitoBean` (not `@MockBean`) — `org.springframework.test.context.bean.override.mockito.MockitoBean`.
+- **Gotcha:** `@EnableJpaAuditing` on `SpringBoot30DayApplication` breaks `@WebMvcTest` → `JPA metamodel must not be empty`. Fix: move `@EnableJpaAuditing` to separate `JpaAuditingConfig`, remove from main class. **Not** fixed by `@ActiveProfiles("test")`.
+- Commented out `@EnableJpaAuditing` on main → controller test passes. **Prod fix:** add `JpaAuditingConfig` so Day 25 auditing still works when app runs.
+
+# Day 27 Experiment 3 — GET /employees/{id} + MockMvc + MockitoBean ✅ DONE
+
+- `EmployeeControllerTest`: `@WebMvcTest` + `@MockitoBean EmployeeService` + `MockMvc`.
+- `when(service.getEmployee(1)).thenReturn(employee)` → mock, no DB.
+- `mockMvc.perform(get("/employees/1"))` → 200 + `jsonPath` assertions. ✅
+- `mvn test` → Tests run: 4 (3 repo + 1 controller), BUILD SUCCESS.
+
+# Day 27 Experiment 4 — jsonPath assertions ✅ DONE
+
+- Covered in Exp 3: `jsonPath("$.id")`, `jsonPath("$.name")`, `jsonPath("$.email")`.
+- `status().isOk()` asserts HTTP 200.
+
+# Day 27 Experiment 5 — POST validation → 400 ⏭️ SKIPPED
+
+- Skipped for now — pattern documented in God-level notes below.
+- When needed: `mockMvc.perform(post("/employees").contentType(JSON).content(...))` + `@Import(GlobalExceptionHandler.class)`.
+
+---
+
+# Day 27 — God-Level Notes (Notebook)
+
+## Why `@WebMvcTest`?
+
+Day 26 tested **repository** (does SQL work?).  
+Day 27 tests **controller** (does HTTP mapping + JSON work?).
+
+```text
+@DataJpaTest     → repo + real H2        → no HTTP, no mocks
+@WebMvcTest      → controller + MockMvc  → mock service, no DB
+@SpringBootTest  → full stack            → slow, later
+```
+
+Controller test question: *"Given service returns X, does my endpoint return correct status + JSON?"*
+
+---
+
+## Three test types (memorize)
+
+| Annotation | Loads | DB | Service | Use for |
+|------------|-------|-----|---------|---------|
+| `@DataJpaTest` | JPA + repos | H2 (real) | No | Repository queries |
+| `@WebMvcTest` | Web + 1 controller | No | **Mocked** | HTTP / JSON / status |
+| `@SpringBootTest` | Everything | Yes (configurable) | Real | Full integration |
+
+---
+
+## Spring Boot 4 — web test dependencies
+
+| Boot 3 | Boot 4 |
+|--------|--------|
+| `@WebMvcTest` in `spring-boot-starter-test` | **`spring-boot-starter-webmvc-test`** |
+| import `...web.servlet.WebMvcTest` | import `org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest` |
+| `@MockBean` | **`@MockitoBean`** — `org.springframework.test.context.bean.override.mockito.MockitoBean` |
+
+```xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-webmvc-test</artifactId>
+    <scope>test</scope>
+</dependency>
+```
+
+Transitive includes `spring-boot-starter-test` (JUnit, Mockito).
+
+---
+
+## Test class skeleton
+
+```java
+@WebMvcTest(EmployeeController.class)
+class EmployeeControllerTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @MockitoBean
+    private EmployeeService employeeService;
+
+    @Test
+    void shouldReturnEmployeeById() throws Exception {
+        Employee employee = new Employee("Krishna H", "krishna@gmail.com");
+        employee.setId(1);
+        employee.setSalary(new BigDecimal("50000"));
+
+        when(employeeService.getEmployee(1)).thenReturn(employee);
+
+        mockMvc.perform(get("/employees/1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(1))
+                .andExpect(jsonPath("$.name").value("Krishna H"))
+                .andExpect(jsonPath("$.email").value("krishna@gmail.com"));
+    }
+}
+```
+
+---
+
+## Key pieces explained
+
+| Piece | Role |
+|-------|------|
+| `@WebMvcTest(EmployeeController.class)` | Load **only** this controller + web infra |
+| `@MockitoBean EmployeeService` | Fake service — **first Mockito use** |
+| `when(...).thenReturn(...)` | Define mock behaviour (static import from `Mockito`) |
+| `MockMvc` | Simulate HTTP in-process (no browser, no port 8080) |
+| `get("/employees/1")` | HTTP GET request |
+| `status().isOk()` | Assert HTTP 200 |
+| `jsonPath("$.name")` | Assert JSON field (Jayway JsonPath syntax) |
+
+---
+
+## Static imports (why?)
+
+```java
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+```
+
+**Normal import** = class (`EmployeeService`, `MockMvc`)  
+**Static import** = call method directly (`when`, `get`, `status`) without class prefix
+
+Beans (`@MockitoBean`) ≠ static methods (`when`, `get`).
+
+---
+
+## Flow diagram
+
+```text
+mockMvc.perform(GET /employees/1)
+    ↓
+real EmployeeController.getEmployee(1)
+    ↓
+@MockitoBean EmployeeService.getEmployee(1)  → returns fake Employee (you defined)
+    ↓
+controller maps to EmployeeResponse JSON
+    ↓
+MockMvc captures response → assert status + jsonPath
+```
+
+No MySQL. No H2. No repository.
+
+---
+
+## `@ActiveProfiles("test")` — needed?
+
+| Test type | Need `test` profile? |
+|-----------|---------------------|
+| `@DataJpaTest` | **Yes** — switches to H2 |
+| `@WebMvcTest` | **No** — no database involved |
+
+---
+
+## Gotcha: `@EnableJpaAuditing` on main class
+
+**Error:** `JPA metamodel must not be empty` / `jpaAuditingHandler` bean creation fails.
+
+**Cause:** `@WebMvcTest` loads `SpringBoot30DayApplication` as `@SpringBootConfiguration`. `@EnableJpaAuditing` on same class tries to boot JPA auditing without full JPA slice.
+
+**Fix:** Move auditing off main class:
+
+```java
+@Configuration
+@EnableJpaAuditing
+public class JpaAuditingConfig { }
+```
+
+Remove `@EnableJpaAuditing` from `SpringBoot30DayApplication`.
+
+Spring docs: avoid area-specific config (JPA, security) on main class when using test slices.
+
+---
+
+## POST test pattern (skipped — for later)
+
+When you need to test validation / create endpoint:
+
+```java
+@WebMvcTest(EmployeeController.class)
+@Import(GlobalExceptionHandler.class)  // needed — @RestControllerAdvice not auto-loaded in slice
+class EmployeeControllerTest {
+
+    @Test
+    void shouldReturn400WhenCreateInvalid() throws Exception {
+        mockMvc.perform(post("/employees")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"name":"","email":"bad","salary":-1}
+                    """))
+            .andExpect(status().isBadRequest());
+    }
+}
+```
+
+Imports: `post` from `MockMvcRequestBuilders`, `MediaType.APPLICATION_JSON`.
+
+`GlobalExceptionHandler` is **not** loaded by `@WebMvcTest` by default — add `@Import` or test returns 500 instead of 400.
+
+---
+
+## What we proved
+
+| Test | Result |
+|------|--------|
+| `GET /employees/1` with mocked service | 200 + correct JSON fields |
+| `mvn test` | 4 tests pass (3 repo + 1 controller) |
+| No Tomcat on 8080 | Slice context only |
+
+---
+
+## Hard rules (memorize)
+
+1. **Controller tests** → `@WebMvcTest`, not `@DataJpaTest` or `@SpringBootTest`.
+2. **Mock the service** with `@MockitoBean` — never real `EmployeeService` in slice.
+3. **Boot 4:** `spring-boot-starter-webmvc-test` + new `@WebMvcTest` import + `@MockitoBean`.
+4. **`when(...).thenReturn(...)`** configures mock before HTTP call.
+5. **`jsonPath("$.field")`** asserts JSON response body.
+6. **Don't put `@EnableJpaAuditing` on main class** — use `JpaAuditingConfig` for slice compatibility.
+7. **`@ActiveProfiles("test")`** for repo tests only — not WebMvcTest.
+
+---
+
+## Decision tree (all test types so far)
+
+```text
+What are you testing?
+├─ Repository / @Query / save-find     → @DataJpaTest + H2 + @ActiveProfiles("test")
+├─ Controller / HTTP / JSON / status  → @WebMvcTest + @MockitoBean + MockMvc
+├─ Service logic in isolation         → plain Mockito / @ExtendWith (later)
+└─ Full API → DB → response           → @SpringBootTest (later)
+```
+
+---
+
+## What's next (Day 28+)
+
+| Topic | Why |
+|-------|-----|
+| `@SpringBootTest` | full integration when slices aren't enough |
+| Service unit tests | Mockito without Spring context |
+| Testcontainers | real MySQL in CI |
+| `@WithMockUser` | security on controller tests |
+
+Day 27 = test HTTP layer fast — mock service, assert status + JSON.
+
+Ready for day review → God-level notes → Jira Done.
+
+---
+
+# Day 28 — Testing Complete (`@SpringBootTest` + Service Unit Tests) ⏸ ON HOLD
+
+Jira: To Do (paused). Resume after Spring Security.
+
+---
+
+# Day 29 — Spring Security Core (AuthN / AuthZ / Protect APIs) ✅ DONE
+
+## Day 29 Objective
+
+Connect:
+
+```text
+Days 10–13 — REST APIs anyone can call (no identity)
+Days 25–27 — auditing, tests
+        ↓
+Day 29 — Spring Security — WHO is calling, and ARE THEY ALLOWED?
+```
+
+Core question:
+
+> **Without Security, every endpoint is public. How do I prove identity (authentication) and enforce permissions (authorization) on my Employee APIs — in a way that matches real apps and interviews?**
+
+In scope (ONE dense day — what you need at this level):
+
+- WHY Security exists (big picture — not annotation soup)
+- Authentication vs Authorization
+- Filter chain mental model
+- `spring-boot-starter-security` + default lock
+- `SecurityFilterChain` bean (modern API)
+- `UserDetailsService` + `PasswordEncoder` (BCrypt)
+- URL rules: public GET / USER write / ADMIN delete
+- HTTP Basic for APIs
+- `@PreAuthorize` + `@EnableMethodSecurity`
+- Interview hard rules + decision tree
+
+Out of scope (later when project needs them):
+
+- Full OAuth2 / OIDC / social login
+- JWT deep dive / refresh tokens (awareness only below)
+- CSRF deep dive for SPA
+- LDAP, SAML, multi-tenant IAM
+- `@WithMockUser` security tests
+
+Jira ticket: created.
+
+---
+
+# Day 29 Experiment 1 — WHY Security? AuthN vs AuthZ + filter chain ✅ DONE
+
+- Q1: without Security anyone can wipe/insert/update data — production disaster. ✅
+- Q2: login succeeded → AuthN OK; 403 on delete → **Authorization** failed (identity known, permission missing). ✅
+- Q3: Security runs **before** controller (filter chain). If after → damage already done; gate must be at the door. ✅
+
+# Day 29 Experiment 2 — add starter, prove default lock ✅ DONE
+
+- Added `spring-boot-starter-security`.
+- Default: all endpoints locked; console shows generated password for user `user`.
+- Without auth → **401**; Basic Auth `user` + generated password → **200**. ✅
+- Proved: Security runs before controller without changing EmployeeController.
+
+# Day 29 Experiment 3 — SecurityFilterChain + users/roles + BCrypt ✅ DONE
+
+- Created `SecurityConfig`: `BCryptPasswordEncoder`, in-memory `vijendra` (USER) + `admin` (USER+ADMIN), `SecurityFilterChain` with HTTP Basic + CSRF disabled.
+- Auth with our users → 200; wrong/no auth → 401. ✅
+- Default generated password gone — we own AuthN now.
+
+# Day 29 Experiment 4 — protect Employee APIs by URL + role ✅ DONE
+
+- URL rules: GET public; POST/PATCH USER|ADMIN; DELETE ADMIN only.
+- Verified: GET no auth → 200; POST no auth → 401; USER delete → 403; ADMIN delete → allowed. ✅
+- Order of `requestMatchers` matters (first match wins).
+
+# Day 29 Experiment 5 — @PreAuthorize (method security) ✅ DONE
+
+- `@EnableMethodSecurity` on `SecurityConfig`.
+- `@PreAuthorize("hasRole('ADMIN')")` on `EmployeeService.deleteEmployee`. ✅
+- URL AuthZ + method AuthZ = defense in depth.
+
+---
+
+# Day 29 — God-Level Notes (Notebook)
+
+## Why Spring Security?
+
+Without it:
+
+```text
+Anyone → GET / POST / DELETE /employees → your DB
+```
+
+Production needs two answers on every sensitive request:
+
+| Question | Name |
+|----------|------|
+| Who are you? | **Authentication (AuthN)** |
+| Are you allowed to do this? | **Authorization (AuthZ)** |
+
+Interviews and real apps both assume this. Controllers stay the same; Security is the **gate before** them.
+
+---
+
+## AuthN vs AuthZ (never confuse)
+
+| | Authentication | Authorization |
+|---|----------------|---------------|
+| Meaning | Prove identity | Check permission |
+| Fail status | **401** Unauthorized | **403** Forbidden |
+| Example | Wrong password | USER tries DELETE (ADMIN only) |
+
+Login OK + delete denied = AuthN succeeded, AuthZ failed.
+
+---
+
+## Filter chain (big picture)
+
+```text
+HTTP request
+    ↓
+Security Filter Chain   ← BEFORE @RestController
+    ↓
+AuthN (who?)
+    ↓
+AuthZ (allowed for this URL / method?)
+    ↓
+Your controller / service
+```
+
+If Security ran **after** the controller, data could already be changed. Gate must be at the door.
+
+---
+
+## Three beans you must understand
+
+| Bean | Job |
+|------|-----|
+| `PasswordEncoder` | Hash passwords — **BCrypt** (salted, one-way) |
+| `UserDetailsService` | Load user + roles by username |
+| `SecurityFilterChain` | Auth mechanism (Basic) + URL AuthZ rules |
+
+Modern config = `@Bean SecurityFilterChain` — **not** deprecated `WebSecurityConfigurerAdapter`.
+
+---
+
+## What we built (`SecurityConfig`)
+
+```text
+spring-boot-starter-security
+        ↓
+PasswordEncoder = BCryptPasswordEncoder
+UserDetailsService = InMemoryUserDetailsManager
+  - vijendra / … → ROLE_USER
+  - admin / …    → ROLE_USER + ROLE_ADMIN
+        ↓
+SecurityFilterChain
+  - csrf.disable()          (API + Basic Auth learning)
+  - httpBasic()
+  - GET /employees/**       → permitAll
+  - DELETE /employees/**    → hasRole("ADMIN")
+  - POST/PATCH              → hasAnyRole("USER","ADMIN")
+  - anyRequest              → authenticated
+        ↓
+@EnableMethodSecurity
+@PreAuthorize("hasRole('ADMIN')") on deleteEmployee
+```
+
+---
+
+## Roles — critical interview detail
+
+```java
+.roles("USER")           // you write
+// Spring stores as ROLE_USER
+
+.hasRole("USER")         // you check — NO "ROLE_" prefix here
+.hasRole("ROLE_USER")    // ❌ wrong — double prefix
+```
+
+`hasAnyRole("USER", "ADMIN")` = either role is enough.
+
+---
+
+## 401 vs 403 (memorize)
+
+| Status | Meaning |
+|--------|---------|
+| **401** | Not authenticated (no/invalid credentials) |
+| **403** | Authenticated, but role/permission missing |
+
+---
+
+## CSRF (awareness only)
+
+- CSRF protects **browser session + cookie** form posts (attacker site tricks logged-in browser).
+- Pure REST + **HTTP Basic / JWT** (no cookie session) → often `csrf.disable()`.
+- Don’t disable CSRF blindly on form-login browser apps.
+
+---
+
+## HTTP Basic (what we used)
+
+- Username + password sent on each request (Postman Basic Auth).
+- Simple for API learning and interviews.
+- Production APIs often move to **JWT / OAuth2** — same AuthN/AuthZ ideas, different token.
+
+---
+
+## JWT / OAuth2 (awareness — not implemented)
+
+| Topic | One-liner |
+|-------|-----------|
+| **JWT** | Stateless token after login; send `Authorization: Bearer …` — no server session |
+| **OAuth2 / OIDC** | Delegate login to Google/GitHub/company IdP |
+| When to learn deep | When project needs mobile/SPA auth or SSO |
+
+Same questions: who are you? what can you do? Filter chain still applies.
+
+---
+
+## URL security vs method security
+
+| Layer | Where | Example |
+|-------|-------|---------|
+| URL | `SecurityFilterChain` | `DELETE /employees/**` → ADMIN |
+| Method | `@PreAuthorize` on service | `deleteEmployee` → ADMIN |
+
+Use URL for HTTP shape; method for business operations (and defense if URL misconfigured).
+
+`@EnableMethodSecurity` required for `@PreAuthorize` to work.
+
+---
+
+## Default Boot behavior (Exp 2)
+
+Add starter only → every endpoint locked + generated password in logs for user `user`.  
+Proves Security sits in front without touching controllers. Then replace with your `SecurityConfig`.
+
+---
+
+## In-memory vs production users
+
+| Now (learning) | Later (prod) |
+|----------------|--------------|
+| `InMemoryUserDetailsManager` | DB table + custom `UserDetailsService` |
+| Hardcoded users | Register / admin-managed users |
+| Same BCrypt idea | Same — always hash passwords |
+
+---
+
+## Decision tree
+
+```text
+Need to protect APIs?
+├─ Add spring-boot-starter-security
+├─ PasswordEncoder (BCrypt) + UserDetailsService
+├─ SecurityFilterChain
+│   ├─ httpBasic or formLogin or JWT filter
+│   ├─ permitAll for public URLs
+│   ├─ hasRole / hasAnyRole for sensitive URLs
+│   └─ anyRequest().authenticated()
+├─ Optional: @EnableMethodSecurity + @PreAuthorize
+└─ Remember: 401 = AuthN, 403 = AuthZ
+```
+
+---
+
+## Hard rules (memorize)
+
+1. **AuthN** = who; **AuthZ** = permission. **401** vs **403**.
+2. Security filter chain runs **before** controllers.
+3. Never store plain-text passwords — **BCrypt**.
+4. `.roles("ADMIN")` → check with `hasRole("ADMIN")` (no double `ROLE_`).
+5. `requestMatchers` **order matters** — first match wins.
+6. Modern config = `SecurityFilterChain` bean, not `WebSecurityConfigurerAdapter`.
+7. `@PreAuthorize` needs `@EnableMethodSecurity`.
+8. CSRF: understand why; disable for API+Basic/JWT learning, not blindly for form apps.
+
+---
+
+## What we proved
+
+| Test | Result |
+|------|--------|
+| No starter → open APIs | Anyone can delete |
+| Starter only | 401 without auth |
+| Our users + BCrypt | Login works; generated password gone |
+| GET public | 200 without auth |
+| POST as anonymous | 401 |
+| DELETE as USER | 403 |
+| DELETE as ADMIN | allowed |
+| `@PreAuthorize` on delete | Method-level ADMIN gate |
+
+---
+
+## What's next
+
+| Topic | Status |
+|-------|--------|
+| Day 28 `@SpringBootTest` + service unit tests | ⏸ ON HOLD |
+| Day 30 Flyway / Profiles / Actuator | Optional prod readiness |
+| JWT deep dive | When a project needs it |
+| DB-backed `UserDetailsService` | When you add a `users` table |
+
+Day 29 = Security core locked — AuthN, AuthZ, filter chain, roles, URL + method protection. Enough for interviews and protecting APIs; extend (JWT/OAuth) when required.
+
+Ready for day review → God-level notes → Jira Done.
