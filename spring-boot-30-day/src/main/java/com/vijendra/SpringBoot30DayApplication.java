@@ -10,7 +10,7 @@ import org.springframework.context.annotation.AnnotationConfigApplicationContext
 import org.springframework.context.annotation.EnableAspectJAutoProxy;
 import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
 
-@EnableJpaAuditing
+// @EnableJpaAuditing
 @SpringBootApplication
 public class SpringBoot30DayApplication {
     public static void main(String[] args) throws Exception {

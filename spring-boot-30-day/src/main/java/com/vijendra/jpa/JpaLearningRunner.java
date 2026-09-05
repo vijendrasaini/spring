@@ -157,8 +157,8 @@ public class JpaLearningRunner implements CommandLineRunner {
         // List<EmployeeEntity> employeeEntities = employeeRepository.findAll(spec);
         // employeeEntities.stream().forEach(ee -> System.out.println(ee.getId() + " | " + ee.getName()));
 
-        boolean updated = this.employeeService.updateEmployeeName(20, "Ramanadand 2020");
-        System.out.println("Updated : " + updated);
+        // boolean updated = this.employeeService.updateEmployeeName(20, "Ramanadand 2020");
+        // System.out.println("Updated : " + updated);
         System.out.println("=== JPA Learning Runner end ===");
     }
 }
