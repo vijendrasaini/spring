@@ -1,0 +1,2 @@
+ALTER TABLE employees
+  ADD COLUMN notes VARCHAR(255) NULL;

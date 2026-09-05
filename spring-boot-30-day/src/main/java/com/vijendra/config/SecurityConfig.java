@@ -16,7 +16,7 @@ import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration
-@EnableWebSecurity
+@EnableWebSecurity(debug = true)
 @EnableMethodSecurity
 public class SecurityConfig {
     @Bean
@@ -48,14 +48,14 @@ public class SecurityConfig {
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http) {
         http.csrf(csrf -> csrf.disable())
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.GET, "/employees", "/employees/**").permitAll()
-                        .requestMatchers(HttpMethod.DELETE, "/employees/**").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.POST, "/employees").hasAnyRole("USER", "ADMIN")
-                        .requestMatchers(HttpMethod.PATCH, "/employees/**").hasAnyRole("USER", "ADMIN")
-                        .anyRequest().authenticated()
-                )
-                .httpBasic(Customizer.withDefaults());
+            .authorizeHttpRequests(auth -> auth
+                    .requestMatchers(HttpMethod.GET, "/employees", "/employees/**").permitAll()
+                    .requestMatchers(HttpMethod.DELETE, "/employees/**").hasRole("ADMIN")
+                    .requestMatchers(HttpMethod.POST, "/employees").hasAnyRole("USER", "ADMIN")
+                    .requestMatchers(HttpMethod.PATCH, "/employees/**").hasAnyRole("USER", "ADMIN")
+                    .requestMatchers("/actuator/health").permitAll()
+                    .anyRequest().authenticated())
+            .httpBasic(Customizer.withDefaults());
 
         return http.build();
     }

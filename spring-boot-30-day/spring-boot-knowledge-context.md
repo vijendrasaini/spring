@@ -6685,3 +6685,1115 @@ Need to protect APIs?
 Day 29 = Security core locked — AuthN, AuthZ, filter chain, roles, URL + method protection. Enough for interviews and protecting APIs; extend (JWT/OAuth) when required.
 
 Ready for day review → God-level notes → Jira Done.
+
+---
+
+# Day 30 — Flyway + Profiles + Actuator (Prod Readiness) ✅ DONE
+
+## Day 30 Objective
+
+Connect:
+
+```text
+Days 1–29 — app works on your machine (manual schema, one application.properties)
+        ↓
+Day 30 — make it production-shaped: versioned DB migrations, env-specific config, health checks
+```
+
+Core question:
+
+> **How do teams share schema changes safely, run the same app in dev vs prod with different settings, and know if the app is healthy — without SSH-ing into the server?**
+
+In scope:
+
+- Flyway — versioned SQL migrations vs HeidiSQL / ddl-auto
+- `db/migration/V{n}__description.sql`; baseline for existing DB
+- `ddl-auto=none` when Flyway owns schema; `flyway-mysql` for MySQL (Flyway 11+)
+- Profiles — `application-dev.properties` + `spring.profiles.active`
+- Actuator — `/actuator/health`; expose only what you need; Security `permitAll` for health
+
+Out of scope (later):
+
+- Liquibase deep dive
+- Custom HealthIndicator / K8s probe deep dive
+- Day 28 `@SpringBootTest` (still on hold)
+
+Jira ticket: created.
+
+---
+
+# Day 30 Experiment 1 — WHAT + WHY ✅ DONE
+
+- Definitions first: Flyway / Profiles / Actuator.
+- Q1–Q3: team schema sync; env config without code change; ready-made health endpoints. ✅
+
+# Day 30 Experiment 2 — Flyway ✅ DONE
+
+- `spring-boot-starter-flyway` + **`flyway-mysql`** (without it → `Unsupported Database: MySQL 8.0`).
+- Baseline existing DB + `V2__add_employee_notes.sql` → `notes` column + `flyway_schema_history`. ✅
+
+# Day 30 Experiment 3 — Profiles ✅ DONE
+
+- Shared `application.properties` + `application-dev.properties`.
+- `spring.profiles.active=dev`. ✅
+
+# Day 30 Experiment 4 — Actuator ✅ DONE
+
+- `spring-boot-starter-actuator` + `management.endpoints.web.exposure.include=health`.
+- Security: `/actuator/health` → `permitAll`.
+- `GET /actuator/health` → `{"status":"UP"}` without auth. ✅
+
+---
+
+# Day 30 — God-Level Notes (Notebook)
+
+## Why this day?
+
+Working on one laptop ≠ production-ready. Teams need:
+
+| Need | Tool |
+|------|------|
+| Schema in Git, applied the same everywhere | **Flyway** |
+| Same JAR, different DB/settings per env | **Profiles** |
+| “Is the app up?” without SSH | **Actuator** |
+
+---
+
+## Flyway — definition
+
+**Flyway** = database migration tool. Versioned SQL files in the project run **in order, once each**, tracked in `flyway_schema_history`.
+
+```text
+src/main/resources/db/migration/
+  V2__add_employee_notes.sql
+       ↓
+App start → Flyway migrate → ALTER TABLE … (if not yet applied)
+```
+
+**Naming:** `V{version}__{description}.sql` — **double underscore** required.
+
+| Approach | Problem |
+|----------|---------|
+| HeidiSQL by hand | Not in Git; teammate/prod diverge |
+| `ddl-auto=update` | Opaque, unsafe in prod |
+| **Flyway** | Explicit, reviewable, repeatable |
+
+**Interview:** *“Flyway version-controls the DB schema like Git version-controls code.”*
+
+### Existing DB (what we did)
+
+Tables already existed → `baseline-on-migrate=true` + `baseline-version=1` (treat current DB as V1) → first real script = **V2**.
+
+### Hibernate + Flyway
+
+```properties
+spring.jpa.hibernate.ddl-auto=none   # or validate
+```
+
+Flyway owns schema changes. Hibernate must not invent columns.
+
+### Flyway 11 + MySQL (Boot 4 gotcha)
+
+```xml
+spring-boot-starter-flyway
+flyway-mysql          <!-- required or: Unsupported Database: MySQL 8.0 -->
+```
+
+---
+
+## Profiles — definition
+
+**Profile** = named environment (`dev`, `test`, `prod`). Spring loads matching property files.
+
+```text
+application.properties          → always
+application-dev.properties      → if profile=dev
+application-test.properties     → if profile=test (Day 26 tests)
+```
+
+```properties
+spring.profiles.active=dev
+```
+
+Log proof: `The following 1 profile is active: "dev"`
+
+**Interview:** *“Profiles switch configuration per environment without changing Java code.”*
+
+| Profile | Typical use |
+|---------|-------------|
+| `dev` | Local MySQL, verbose logging |
+| `test` | H2 for `@DataJpaTest` |
+| `prod` | Cloud DB, secrets, quiet logs |
+
+Never commit prod passwords as the only shared config everyone uses blindly — use profiles + env vars / secrets in real teams.
+
+---
+
+## Actuator — definition
+
+**Actuator** = production-ready ops endpoints (health, metrics, info) without writing controllers.
+
+```text
+GET /actuator/health  →  {"status":"UP"}
+```
+
+```properties
+management.endpoints.web.exposure.include=health
+```
+
+Expose **only** what you need — not `*`.
+
+### Security
+
+With Spring Security, health needs:
+
+```java
+.requestMatchers("/actuator/health").permitAll()
+```
+
+Load balancers / K8s probe health **without** login. Other actuator endpoints stay locked.
+
+**Interview:** *“Actuator exposes health/ops endpoints; in prod expose minimally and secure the rest.”*
+
+---
+
+## How the three fit
+
+```text
+Same code (JAR)
+    ↓
+Profile      → which DB / logging
+Flyway       → apply pending migrations to that DB
+Actuator     → is process UP (and often DB reachable)
+```
+
+---
+
+## What we proved
+
+| Piece | Result |
+|-------|--------|
+| Flyway V2 | `employees.notes` + `flyway_schema_history` |
+| Restart | V2 not re-run |
+| Profile `dev` | Active in startup log |
+| `/actuator/health` | `UP` without auth |
+
+---
+
+## Hard rules (memorize)
+
+1. **Flyway** = versioned SQL in Git; history table = applied once.
+2. Name: `V2__description.sql` (double `_`).
+3. With Flyway → `ddl-auto=none` or `validate`.
+4. Existing DB → `baseline-on-migrate` (or equivalent strategy).
+5. MySQL + Flyway 11 → add **`flyway-mysql`**.
+6. **Profiles** = env-specific properties; activate with `spring.profiles.active`.
+7. **Actuator** = ops endpoints; expose `health` only by default habit.
+8. Permit `/actuator/health` in Security if LBs need unauthenticated probes.
+
+---
+
+## Decision tree
+
+```text
+Schema change?
+├─ Write V{n}__….sql under db/migration
+├─ Commit to Git
+└─ Deploy → Flyway applies on startup
+
+Different env settings?
+└─ application-{profile}.properties + spring.profiles.active
+
+Need health check?
+└─ Actuator + expose health + Security permitAll for /actuator/health
+```
+
+---
+
+## What's next
+
+| Topic | Status |
+|-------|--------|
+| Day 28 `@SpringBootTest` + service unit tests | ⏸ ON HOLD |
+| JWT / DB UserDetailsService | When project needs it |
+| Curriculum core | Days 1–27, 29–30 done |
+
+Day 30 = prod readiness basics — migrations, env config, health. Enough for interviews and real teams; deepen when deploying for real.
+
+Ready for day review → God-level notes → Jira Done.
+
+---
+
+# Spring Security Deep Dive (5 YOE track) — ROADMAP
+
+Day 29 = **operator level** (protect APIs, AuthN vs AuthZ, Basic, roles).
+
+This track = **architect / senior interview level** — internals, request lifecycle, how pieces connect.
+
+**Honest scope:** “Know everything in Spring Security” is impossible (OAuth2, SAML, LDAP, reactive, …).  
+**5 YOE target** = you can draw the architecture, explain the request path, debug 401/403, design session vs JWT, and answer senior interview questions without memorizing only annotations.
+
+| Day | Theme | Outcome |
+|-----|--------|---------|
+| **31** | Architecture & request lifecycle | FilterChainProxy, SecurityFilterChain, filter order, where AuthN/AuthZ sit |
+| **32** | Authentication internals | Authentication, AuthenticationManager, Provider, UserDetailsService, SecurityContextHolder |
+| **33** | Authorization internals | AuthorizationManager / filter authorization, method security proxy, EntryPoint vs AccessDeniedHandler |
+| **34** | Stateless APIs (JWT architecture) | No session, Bearer token, custom filter placement, when JWT vs Basic |
+| **35** (optional) | OAuth2 Resource Server + interview scenarios | JWT validation via Spring, common senior Q&A |
+
+Still out of scope unless you ask later: full Authorization Server, SAML, LDAP, WebFlux Security, complex multi-tenant IAM.
+
+Day 28 testing remains ⏸ ON HOLD.
+
+---
+
+# Day 31 — Security Architecture & Request Lifecycle ✅ DONE
+
+## Day 31 Objective
+
+Connect:
+
+```text
+Day 29 — you configured SecurityFilterChain (what to allow)
+        ↓
+Day 31 — what Spring actually builds and runs on every request (how / internals)
+```
+
+Core question:
+
+> **From the moment an HTTP request hits Tomcat until your `@RestController` runs — what does Spring Security do, in what order, and which objects hold “who is the user”?**
+
+Jira ticket: created.
+
+---
+
+# Day 31 Experiment 1 — Architecture + see filters ✅ DONE
+
+- FilterChainProxy vs SecurityFilterChain vs Filters.
+- Filters created by `http.build()`, not handwritten `Filter` classes.
+- `@EnableWebSecurity(debug = true)` printed chain:
+  `DisableEncodeUrlFilter, WebAsyncManagerIntegrationFilter, SecurityContextHolderFilter, HeaderWriterFilter, LogoutFilter, BasicAuthenticationFilter, RequestCacheAwareFilter, SecurityContextHolderAwareRequestFilter, AnonymousAuthenticationFilter, ExceptionTranslationFilter, AuthorizationFilter`
+- No CsrfFilter — `csrf.disable()`.
+
+# Day 31 Experiment 2 — Map config → filters + understanding ✅ DONE
+
+- Q1: AuthorizationFilter after Basic — need identity before AuthZ. ✅
+- Q2: No CsrfFilter — disabled. ✅
+- Q3: Printed list = filters **inside** SecurityFilterChain; FilterChainProxy is the outer servlet filter (not in that list). ✅
+
+---
+
+# Day 31 — God-Level Notes (Notebook)
+
+## Big picture
+
+```text
+HTTP → Tomcat → FilterChainProxy → SecurityFilterChain (ordered Filters)
+     → DispatcherServlet → @RestController
+```
+
+Security is a **servlet Filter layer** in front of MVC. Controllers stay unchanged.
+
+---
+
+## Three names (never mix)
+
+| Name | Role |
+|------|------|
+| **FilterChainProxy** | The **one** Servlet filter registered with Tomcat (`springSecurityFilterChain`). Front door. |
+| **SecurityFilterChain** | Your `@Bean` — ordered list of Security filters + URL matching. Checklist behind the door. |
+| **Filter** (e.g. Basic, Authorization) | One step in that checklist. Created by `HttpSecurity` DSL + `build()`. |
+
+**Debug list** (`@EnableWebSecurity(debug=true)`) shows **SecurityFilterChain** contents — **not** FilterChainProxy itself.
+
+---
+
+## How filters appear without writing `implements Filter`
+
+| Your config | What gets added |
+|-------------|-----------------|
+| `spring-boot-starter-security` | Registers FilterChainProxy in container |
+| `@Bean SecurityFilterChain` + `http.build()` | Builds internal filter list |
+| `.httpBasic(...)` | **BasicAuthenticationFilter** |
+| `.authorizeHttpRequests(...)` | **AuthorizationFilter** |
+| `.csrf(disable)` | **No** CsrfFilter |
+
+Config → Spring instantiates filters. Not hidden magic — generated.
+
+---
+
+## Your observed chain (order = execution order)
+
+```text
+SecurityContextHolderFilter     → prepare SecurityContext (ThreadLocal)
+HeaderWriterFilter
+LogoutFilter
+BasicAuthenticationFilter       → AUTHENTICATION (who)
+…
+AnonymousAuthenticationFilter   → if no user → anonymous principal
+ExceptionTranslationFilter      → map security failures → 401 / 403
+AuthorizationFilter             → AUTHORIZATION (allowed?)
+→ Controller
+```
+
+| Concern | Filter |
+|---------|--------|
+| Who are you? | BasicAuthenticationFilter (+ UserDetailsService / AuthenticationManager — Day 32) |
+| Allowed? | AuthorizationFilter |
+| HTTP status for failures | ExceptionTranslationFilter → EntryPoint (401) / AccessDeniedHandler (403) |
+
+---
+
+## SecurityContext
+
+| Object | Role |
+|--------|------|
+| `Authentication` | Principal + authorities + authenticated flag |
+| `SecurityContext` | Holds current `Authentication` |
+| `SecurityContextHolder` | Access: `getContext().getAuthentication()` — default **ThreadLocal** |
+
+Cleared after request so threads don’t leak identity.
+
+---
+
+## 401 vs 403 (in the chain)
+
+| Status | Meaning | Typical stage |
+|--------|---------|----------------|
+| **401** | Not authenticated | AuthN missing/failed → ExceptionTranslationFilter / EntryPoint |
+| **403** | Authenticated, not allowed | AuthorizationFilter deny → AccessDeniedHandler |
+
+---
+
+## Method security vs filter AuthZ
+
+```text
+URL rules     → AuthorizationFilter (before controller)
+@PreAuthorize → AOP on service (after controller) — Day 33
+```
+
+---
+
+## Hard rules (memorize)
+
+1. **FilterChainProxy** = servlet door; **SecurityFilterChain** = ordered checklist.
+2. You configure DSL; **`build()`** creates Filters.
+3. See list: `@EnableWebSecurity(debug = true)` (dev only).
+4. AuthN filters **before** AuthZ filter.
+5. Current user = **SecurityContextHolder** (ThreadLocal).
+6. Debug print ≠ FilterChainProxy; it prints inner chain.
+
+---
+
+## 90-second interview answer
+
+> Spring Security registers a FilterChainProxy in front of DispatcherServlet. That proxy runs a SecurityFilterChain — filters built from SecurityFilterChain bean. BasicAuthenticationFilter authenticates and stores Authentication in SecurityContextHolder. AuthorizationFilter enforces URL rules. ExceptionTranslationFilter maps failures to 401/403. Method security is a later AOP check on the service.
+
+---
+
+## What's next — Day 32
+
+**Authentication internals:** `Authentication` object, `AuthenticationManager`, `AuthenticationProvider`, `DaoAuthenticationProvider`, how Basic filter calls them, password check with BCrypt.
+
+Day 31 = architecture of the gate. Day 32 = how “login” actually works inside the gate.
+
+Ready for day review → God-level notes → Jira Done.
+
+---
+
+# Day 32 — Authentication Internals (Manager / Provider / UserDetails / Context) ✅ DONE
+
+## Day 32 Objective
+
+Connect:
+
+```text
+Day 31 — BasicAuthenticationFilter sits in the chain (where AuthN runs)
+        ↓
+Day 32 — Authentication → Manager → Provider → UserDetailsService → PasswordEncoder → SecurityContext
+```
+
+Core question:
+
+> **When Postman sends `Authorization: Basic …`, what objects are created and which classes decide “password OK” vs 401 — step by step?**
+
+Jira ticket: created.
+
+---
+
+# Day 32 Experiment 1 — AuthN object model + flow ✅ DONE
+
+- Flow taught: Filter → Manager → Provider → UserDetailsService + PasswordEncoder → SecurityContext.
+- Q1: Manager = facade / entry point; Provider = actual verification strategy (clarified after “not sure”). ✅
+- Q2: UserDetailsService loads user by username (e.g. in-memory `vijendra` → UserDetails). ✅
+- Q3: Password not kept in SecurityContext after success — credentials cleared; only needed for verify. ✅
+- Follow-up: AuthenticationManager (interface) vs ProviderManager (impl); plain-English meaning of “provider”; why username/password is a provider; OAuth IdP vs Spring AuthenticationProvider; why multiple providers.
+
+---
+
+# Day 32 — God-Level Notes (Notebook)
+
+## AuthN flow (Basic Auth)
+
+```text
+Authorization: Basic …
+    → BasicAuthenticationFilter
+    → unauthenticated Authentication (username + password)
+    → AuthenticationManager.authenticate(...)   // interface
+    → ProviderManager                           // the usual implementation
+         → AuthenticationProvider(s)
+         → DaoAuthenticationProvider
+              → UserDetailsService.loadUserByUsername
+              → PasswordEncoder.matches(raw, hash)
+    → authenticated Authentication
+    → SecurityContextHolder.setAuthentication(...)
+```
+
+Failure → `BadCredentialsException` → ExceptionTranslationFilter → **401**.
+
+---
+
+## AuthenticationManager vs ProviderManager vs AuthenticationProvider
+
+Three names — don’t treat them as siblings.
+
+| Name | What it is | Role |
+|------|------------|------|
+| **`AuthenticationManager`** | **Interface** | Contract filters call: `authenticate(token)` |
+| **`ProviderManager`** | **Default implementation** of that interface | Orchestrates a **list** of `AuthenticationProvider`s |
+| **`AuthenticationProvider`** | Strategy / worker | Actually verifies one kind of credentials |
+
+```text
+AuthenticationManager     ← interface (“can authenticate”)
+        ▲
+        │ implements
+ProviderManager           ← “manager that uses Providers” (NOT “a type of Provider”)
+        │
+        │ has list of
+        ▼
+AuthenticationProvider(s) ← DaoAuthenticationProvider, JWT, LDAP, …
+```
+
+**Naming trap:** `ProviderManager` sounds like a sibling of “Provider.” It is not.  
+It means: **a Manager that coordinates AuthenticationProviders**.
+
+Mental rename (for clarity only):
+
+```text
+AuthenticationManager  ≈ authenticator role (interface)
+ProviderManager        ≈ provider-list authenticator (implementation)
+AuthenticationProvider ≈ username-password checker / JWT checker / …
+```
+
+**Other Manager implementations?** In practice for servlet apps, **`ProviderManager` is the one**. Custom managers / wrappers are rare. Reactive uses a parallel API (`ReactiveAuthenticationManager`). Interview answer: *“I use ProviderManager; I swap Providers, not Managers.”*
+
+**Manager does not check the password.** Provider does (via UserDetailsService + PasswordEncoder for DAO).
+
+You rarely implement Manager. You supply **UserDetailsService** + **PasswordEncoder**; Boot wires **DaoAuthenticationProvider** into **ProviderManager**.
+
+```text
+Filter → AuthenticationManager (ProviderManager)
+              ├─ DaoAuthenticationProvider   ← username/password (our app)
+              ├─ Jwt… Provider               ← if configured
+              └─ Ldap… Provider              ← if configured
+         first provider that supports(token) runs
+```
+
+---
+
+## What does “provider” mean? (plain English)
+
+Forget Spring jargon for a second.
+
+**Provider** = something that **supplies a specific service**.
+
+Here the service is: **verify identity for one kind of proof**.
+
+So **`AuthenticationProvider`** = a **plug-in / specialist that knows how to check one style of login**.
+
+| Proof the client sends | Specialist that verifies it |
+|------------------------|-----------------------------|
+| Username + password | `DaoAuthenticationProvider` |
+| JWT | JWT-oriented provider / resource-server support |
+| LDAP bind | LDAP provider |
+
+**Why is username + password “a provider”?**  
+Because that pair is still **one way of proving who you are**. Spring needs a component whose job is to verify **that** way — not only “social login.”
+
+```text
+“I claim I’m vijendra, password = …”
+        ↓
+DaoAuthenticationProvider
+        ↓
+load user + check password hash → yes/no
+```
+
+---
+
+## “Provider” in social login vs Spring (same word, different layer)
+
+| Term | Meaning |
+|------|---------|
+| **Identity Provider (IdP)** — Google, GitHub, Okta | **External** system that owns the user account and says “this person logged in with us” |
+| **Spring `AuthenticationProvider`** | **Inside your app** — class that validates one credential/token type |
+
+```text
+Social login (big picture)
+  User → Google (IdP) → your app receives a token
+              ↓
+  Your app → Spring AuthenticationProvider (or OAuth support)
+             accepts/verifies that token → SecurityContext
+```
+
+Related idea (identity). **Not** the same object as `DaoAuthenticationProvider`.
+
+---
+
+## Why multiple Providers? (why the abstraction)
+
+One Manager, many Providers = **Strategy pattern**: same door, different ID checks.
+
+| Scenario | Providers |
+|----------|-----------|
+| Our app today | Only `DaoAuthenticationProvider` |
+| Password + JWT API | Dao + JWT provider |
+| Local admin + company LDAP | Dao + LDAP provider |
+
+If BasicAuthenticationFilter hardcoded “InMemory + BCrypt,” adding JWT/LDAP would mean rewriting the filter. Instead:
+
+```text
+Filter → Manager.authenticate(token)   // stable
+              └── whichever Provider supports that token
+```
+
+---
+
+## Authentication object (two lives)
+
+| Moment | Content | authenticated |
+|--------|---------|---------------|
+| Input to manager | principal=username, credentials=password | `false` |
+| Output on success | principal=UserDetails, authorities=roles, credentials cleared | `true` |
+
+---
+
+## Your beans in the flow
+
+| Bean | Step |
+|------|------|
+| `UserDetailsService` (InMemory…) | Load user + hash + roles by username |
+| `PasswordEncoder` (BCrypt) | `matches(raw from header, hash from UserDetails)` |
+| `SecurityFilterChain` + `.httpBasic()` | Installs BasicAuthenticationFilter that calls the manager |
+
+---
+
+## SecurityContext after success
+
+- Holds authenticated `Authentication` (who + roles).
+- **Password should not remain** — credentials cleared after verify (avoid leaking secrets in memory/session dumps).
+- Later: AuthorizationFilter / `@PreAuthorize` read authorities from context — not the password.
+
+---
+
+## Hard rules (memorize)
+
+1. Filter → **AuthenticationManager** → **Provider** → UserDetailsService + PasswordEncoder → SecurityContext.
+2. `AuthenticationManager` = interface; **`ProviderManager` = the usual implementation** (manages Providers — not a Provider itself).
+3. **Provider** = plug-in that verifies **one style** of login (password is one style).
+4. OAuth **IdP** (Google) ≠ Spring **AuthenticationProvider** (in-app checker).
+5. Multiple Providers = multiple identity-check strategies under one Manager.
+6. Success → context filled; failure → **401** (not 403).
+7. Never store/compare plain passwords; BCrypt `matches`; password not kept in context after AuthN.
+
+---
+
+## 90-second interview answer
+
+> BasicAuthenticationFilter builds an unauthenticated token and calls AuthenticationManager. In practice that is a ProviderManager, which delegates to an AuthenticationProvider such as DaoAuthenticationProvider. That provider loads UserDetails and checks the password with PasswordEncoder. On success, authenticated Authentication goes into SecurityContextHolder; credentials are cleared. On failure, BadCredentialsException becomes 401. “Provider” means a verification strategy for one credential type — username/password is one strategy; Google as an Identity Provider is an external identity source at a different layer.
+
+---
+
+## What's next — Day 33
+
+**Authorization internals:** AuthorizationFilter, how `requestMatchers` / `hasRole` are evaluated, AccessDeniedHandler vs AuthenticationEntryPoint, `@PreAuthorize` / method security AOP proxy.
+
+Day 32 = how identity is proven. Day 33 = how permission is decided.
+
+Ready for day review → God-level notes → Jira Done.
+
+---
+
+# Day 33 — Authorization Internals (Filter AuthZ / 401–403 / Method Security AOP) ✅ DONE
+
+## Day 33 Objective
+
+Connect:
+
+```text
+Day 31 — AuthorizationFilter sits at the end of the chain (where AuthZ runs)
+Day 32 — Authentication lives in SecurityContext (who you are)
+        ↓
+Day 33 — AuthorizationManager decides allowed?; EntryPoint vs AccessDeniedHandler; @PreAuthorize AOP
+```
+
+Core question:
+
+> **After identity is known (or anonymous) — who decides “allowed?”, how do `hasRole` / `permitAll` work, why is it 401 vs 403, and when does `@PreAuthorize` fire relative to the controller?**
+
+Jira ticket: created.
+
+---
+
+# Day 33 Experiment 1 — AuthZ object model (teach first) ✅ DONE
+
+- AuthorizationFilter = path + method + Authentication from context; no PasswordEncoder.
+- AuthN path (Basic → Manager → Provider) does password check; AuthZ only reads authorities.
+- USER delete → **403** / AccessDeniedHandler; anonymous + protected → **401** / AuthenticationEntryPoint.
+- `@PreAuthorize` runs when service proxy is invoked — after controller method has started (on the service call).
+- Q1–Q3 answered correctly (naming: BasicAuthenticationFilter / Provider, not “AuthenticationFilter”).
+
+# Day 33 Experiment 2 — Map real requests to AuthZ path ✅ DONE
+
+| Case | Rule | Result |
+|------|------|--------|
+| A GET no auth | 1st `permitAll` | allow → 200 |
+| B POST no auth | 3rd `hasAnyRole` | deny → 401 |
+| C POST USER | 3rd | allow → 201 |
+| D DELETE USER | 2nd `hasRole(ADMIN)` | deny → 403 |
+| E DELETE ADMIN | 2nd | allow → 204; `@PreAuthorize` also runs |
+| URL DELETE rule removed, `@PreAuthorize` kept | | USER still blocked at service proxy |
+
+# Day 33 Experiment 3 — EntryPoint vs AccessDeniedHandler ✅ DONE
+
+- Both are **handlers**, not exception type names.
+- `AuthenticationEntryPoint` → commence auth / **401** (anonymous or AuthN fail).
+- `AccessDeniedHandler` → handle `AccessDeniedException` / **403** (known user, not allowed).
+- Wrong Basic password → AuthN fail → **401** (not AuthZ).
+
+# Day 33 Experiment 4 — Method security AOP / proxy ✅ DONE
+
+- `@PreAuthorize` runs only when the **proxied** service method is invoked; if controller never calls service → annotation never fires.
+- Annotation = metadata; enforcement = AOP interceptor on the Spring proxy.
+- Self-invocation (`this.deleteEmployee`) bypasses proxy → check skipped (same trap as `@Transactional`).
+
+---
+
+# Day 33 — God-Level Notes (Notebook)
+
+## AuthZ after AuthN (big picture)
+
+```text
+SecurityContext has Authentication (or anonymous)
+    → AuthorizationFilter
+         → AuthorizationManager (built from authorizeHttpRequests)
+         → match requestMatchers (order matters)
+         → allow / deny
+    → (if allow) Controller
+         → Service PROXY
+              → @PreAuthorize (method security)
+              → real method
+```
+
+Day 32 = prove identity. Day 33 = decide permission. Password is **not** re-checked at AuthZ.
+
+---
+
+## URL AuthZ pieces
+
+| Piece | Role |
+|-------|------|
+| `.authorizeHttpRequests(...)` | Declares rules; wired at `http.build()` |
+| **`AuthorizationManager`** | Decision engine: request + Authentication → yes/no |
+| **`AuthorizationFilter`** | Filter that invokes that manager (last in your chain) |
+
+Looks at: **HTTP method + path + authorities** in SecurityContext. Not PasswordEncoder.
+
+---
+
+## Roles vs authorities
+
+| API | Meaning |
+|-----|---------|
+| `.roles("ADMIN")` | stores authority `ROLE_ADMIN` |
+| `.hasRole("ADMIN")` | checks `ROLE_ADMIN` |
+| `.hasAuthority("ROLE_ADMIN")` | same check, explicit |
+
+---
+
+## Your request matrix (locked)
+
+| Request | Auth | Rule | Status |
+|---------|------|------|--------|
+| GET `/employees` | none | `permitAll` | 200 |
+| POST `/employees` | none | `hasAnyRole` | **401** |
+| POST `/employees` | USER | `hasAnyRole` | 201 |
+| DELETE | USER | `hasRole(ADMIN)` | **403** |
+| DELETE | ADMIN | URL + `@PreAuthorize` | 2xx |
+
+---
+
+## 401 vs 403 — handlers (not exception names)
+
+`ExceptionTranslationFilter` maps security failures to HTTP:
+
+| Condition | Handler | Status |
+|-----------|---------|--------|
+| Not really authenticated (anonymous / AuthN fail) | **`AuthenticationEntryPoint`** | **401** |
+| Authenticated, missing permission | **`AccessDeniedHandler`** (`AccessDeniedException`) | **403** |
+
+```text
+Wrong password     → AuthN fail → EntryPoint → 401
+USER lacks ADMIN   → AuthZ deny → AccessDeniedHandler → 403
+```
+
+Anonymous still has an Authentication (from `AnonymousAuthenticationFilter`).  
+`permitAll` allows it; `authenticated` / `hasRole` do not → EntryPoint path.
+
+---
+
+## Method security (second gate)
+
+| | URL AuthZ | Method AuthZ |
+|--|-----------|--------------|
+| Where | `AuthorizationFilter` | AOP on service bean |
+| When | Before controller | After controller starts, on service call |
+| Config | `authorizeHttpRequests` | `@EnableMethodSecurity` + `@PreAuthorize` |
+
+Delete flow with ADMIN:
+
+```text
+AuthorizationFilter (ADMIN) → Controller → EmployeeService proxy
+  → @PreAuthorize("hasRole('ADMIN')") → delete body
+```
+
+Defense in depth: remove URL DELETE rule → `@PreAuthorize` still blocks USER.
+
+**Proxy rule:** only calls through the Spring bean hit `@PreAuthorize`.  
+`this.method()` inside the same class → no proxy → annotation skipped.
+
+---
+
+## Hard rules
+
+1. AuthZ reads SecurityContext authorities — does not verify passwords.
+2. First matching `requestMatchers` wins — order matters.
+3. 401 = EntryPoint (prove identity); 403 = AccessDeniedHandler (known, forbidden).
+4. URL gate ≠ method gate; use both for sensitive ops when it helps.
+5. `@PreAuthorize` needs the proxy; self-invocation bypasses it.
+6. `hasRole("X")` ⇒ authority `ROLE_X`.
+
+---
+
+## 90-second interview answer
+
+> After Authentication is in SecurityContext, AuthorizationFilter uses an AuthorizationManager built from authorizeHttpRequests — matching method, path, and roles/authorities. Failures go through ExceptionTranslationFilter: unauthenticated → AuthenticationEntryPoint → 401; authenticated but forbidden → AccessDeniedHandler → 403. Method security (@PreAuthorize) is a second AOP check on the service proxy after the controller calls it — defense in depth, same self-invocation caveat as @Transactional.
+
+---
+
+## What's next — Day 34
+
+**Stateless APIs / JWT architecture:** no session, Bearer token, where a JWT filter sits in the chain, when JWT vs Basic.
+
+Day 33 = how permission is decided. Day 34 = how APIs prove identity without server sessions.
+
+Ready for day review → mark Jira **Done**.
+
+---
+
+# Day 34 — Stateless APIs & JWT Architecture (Bearer / no server session) ✅ DONE
+
+## Day 34 Objective
+
+Connect:
+
+```text
+Days 31–33 — Filter chain, AuthN → SecurityContext, AuthZ → 401/403
+        ↓
+Day 34 — Prove identity with a token (Bearer/JWT), not a server session
+```
+
+Core question:
+
+> **How does a REST API authenticate without storing a login session on the server — and where does a JWT/Bearer check sit so AuthorizationFilter and `@PreAuthorize` still work the same?**
+
+Jira ticket: created.
+
+---
+
+# Day 34 Experiment 1 — Session vs Stateless + Bearer (teach first) ✅ DONE
+
+- AuthZ unchanged after JWT fills SecurityContext — AuthorizationFilter / `@PreAuthorize` same as Basic.
+- JWT payload is Base64-encoded (readable), not encrypted — never put passwords/secrets in claims.
+- JWT/Bearer filter runs **before** AuthorizationFilter (identity first, then allowed?).
+
+# Day 34 Experiment 2 — Login + API request flow ✅ DONE
+
+- PasswordEncoder only at **login** (issue token); API calls validate JWT, not password.
+- Expired / invalid token → unauthenticated → **401** (EntryPoint), not 403.
+- AuthZ unchanged: reads roles/authorities from SecurityContext, however it was filled (Basic or JWT).
+
+# Day 34 Experiment 3 — STATELESS, CSRF, Basic vs JWT judgment ✅ DONE
+
+- STATELESS: no server session / no need to store login state for each request; token is the proof.
+- Classic CSRF targets **cookies**; Bearer-in-header APIs → CSRF often disabled (as you already do).
+- Basic still OK: few trusted clients / learning / password-per-call acceptable.
+
+---
+
+# Day 34 — God-Level Notes (Notebook)
+
+## Big picture
+
+```text
+Days 31–33  Filter → AuthN → SecurityContext → AuthZ (401/403)
+Day 34      Same pipeline; AuthN proof = Bearer JWT (stateless), not password every time
+```
+
+AuthZ does **not** change. Only **how** SecurityContext gets filled changes.
+
+---
+
+## Stateful vs Stateless
+
+| | Session (stateful) | JWT / Bearer (stateless) |
+|--|--------------------|---------------------------|
+| Server stores | Session “user logged in” | Usually nothing per login |
+| Client sends | `JSESSIONID` cookie | `Authorization: Bearer …` |
+| Scale | Session store / sticky | Any node validates token |
+
+`SessionCreationPolicy.STATELESS` = don’t create HttpSession for Security; each request brings its own proof.
+
+---
+
+## Basic vs Bearer
+
+```text
+Authorization: Basic  base64(user:password)   ← credentials every request
+Authorization: Bearer eyJhbGciOi…             ← signed token after login
+```
+
+| | Basic | JWT Bearer |
+|--|-------|------------|
+| Filter | BasicAuthenticationFilter | JWT / Bearer filter (before AuthorizationFilter) |
+| PasswordEncoder | every request | **login only** |
+| Typical | learning / internal | SPA, mobile, multi-service |
+
+---
+
+## Two-step JWT flow
+
+```text
+1) POST /login  → verify password → issue signed JWT (sub, roles, exp)
+2) API call     → Bearer token → validate sig + exp → SecurityContext
+                → AuthorizationFilter / @PreAuthorize (unchanged)
+```
+
+JWT shape: `header.payload.signature`  
+Payload is **encoded (readable), not encrypted** — never put passwords/secrets in claims.
+
+Expired / bad token → unauthenticated → **401**.  
+Valid user, wrong role → **403** (Day 33 unchanged).
+
+---
+
+## Filter placement
+
+```text
+… Jwt/Bearer AuthN filter … ExceptionTranslationFilter → AuthorizationFilter
+```
+
+Identity **before** AuthZ — same slot idea as Basic.
+
+---
+
+## CSRF reminder
+
+Cookie-session browser apps → CSRF matters.  
+Pure API + `Authorization` header (Basic/Bearer), no session cookie auth → often `csrf.disable()`.
+
+---
+
+## Refresh token (awareness)
+
+Access JWT = short-lived, used on APIs.  
+Refresh token = renew access without re-entering password. Not implemented this day.
+
+---
+
+## When to choose what
+
+| Prefer Basic | Prefer JWT / Bearer |
+|--------------|---------------------|
+| Few clients, learning, demos | Many clients, SPA/mobile, services |
+| Password each call OK | Short-lived token, no session store |
+| | SSO / OAuth2 IdP (Day 35 Resource Server) |
+
+---
+
+## Hard rules
+
+1. JWT AuthN fills SecurityContext; AuthZ rules stay the same.
+2. Validate Bearer **before** AuthorizationFilter.
+3. Password check at login; API calls check token, not password.
+4. Invalid/expired token → **401**; wrong role → **403**.
+5. Don’t put secrets in JWT claims (payload is readable).
+6. Stateless API ≈ STATELESS sessions + Bearer; CSRF usually off for header auth.
+
+---
+
+## 90-second interview answer
+
+> Stateful auth stores a server session; stateless APIs use Bearer tokens so each request carries proof. JWT is header.payload.signature — claims like sub, roles, exp; signature proves integrity. Login verifies password and issues a token; later calls validate the JWT into SecurityContext. AuthorizationFilter and @PreAuthorize stay the same. Bad/expired token is 401; wrong role is 403. Basic is fine for simple/internal apps; JWT fits SPA, mobile, and multi-service designs.
+
+---
+
+## What's next — Day 35 (optional)
+
+**OAuth2 Resource Server:** Spring validates JWTs for you; wire Bearer into your Employee API; senior interview scenarios.
+
+Day 34 = architecture. Day 35 = Spring’s standard way to **consume** JWTs.
+
+Ready for day review → mark Jira **Done**.
+
+---
+
+# Day 35 — OAuth2 Resource Server (Spring validates JWTs) + Interview Q&A ✅ DONE
+
+## Day 35 Objective
+
+Connect:
+
+```text
+Day 34 — JWT / Bearer architecture (hand-drawn filter idea)
+        ↓
+Day 35 — Spring oauth2-resource-server does the validation for you
+```
+
+Core question:
+
+> **In OAuth2 terms, what is my Employee API — and how does Spring validate a Bearer JWT from an IdP so AuthorizationFilter / `@PreAuthorize` still work?**
+
+Jira ticket: created.
+
+---
+
+# Day 35 Experiment 1 — AS / RS / Client (teach first) ✅ DONE
+
+- Day 35 design: Employee API = **Resource Server**; AS issues JWT.
+- Today with Basic: protects APIs **and** checks password itself — not OAuth2 RS yet (no external token).
+- RS validates Bearer JWT (sig/exp/issuer); does **not** need user password — identity proven at AS.
+
+# Day 35 Experiment 2 — Spring Resource Server wiring ✅ DONE (teach)
+
+- `issuer-uri`: trust only tokens from that AS (iss + JWKS); not “anyone’s JWT”.
+- Valid JWT + missing ADMIN → still **403** via AuthorizationFilter / `@PreAuthorize`.
+- Q3 clarified: with JWT, authorities usually come from **token claims** (not UserDetailsService each call) — mapping `roles`/`scope` → `ROLE_…` / `SCOPE_…` matters for `hasRole`.
+
+# Day 35 Experiment 3 — Senior interview drill ✅ DONE
+
+1. FilterChainProxy = Security’s Servlet filter entry; SecurityFilterChain = ordered list of Security filters.
+2. Manager orchestrates; Provider performs identity check (ProviderManager implements AuthenticationManager).
+3. 401 → AuthenticationEntryPoint; 403 → AccessDeniedHandler (via ExceptionTranslationFilter) — not `@ExceptionHandler`.
+4. Employee API in Day 35 design = **Resource Server**; Basic today ≈ protect APIs + check password yourself (not OAuth2 RS yet).
+5. AuthZ independent of AuthN mechanism — path + method + authorities from SecurityContext.
+
+---
+
+# Day 35 — God-Level Notes (Notebook)
+
+## OAuth2 roles
+
+| Role | Job |
+|------|-----|
+| **Client** | Calls the API (SPA, mobile, another service, Postman) |
+| **Authorization Server (AS / IdP)** | Authenticates user; **issues** JWT |
+| **Resource Server (RS)** | Protects API; **validates** Bearer JWT |
+
+```text
+Client → AS (get token) → RS (API + Authorization: Bearer …)
+```
+
+Day 35 design: **Employee API = Resource Server**.  
+Today’s Basic app: secured API that checks password **itself** — similar job, not OAuth2 RS yet.
+
+---
+
+## Spring wiring (standard path)
+
+```text
+spring-boot-starter-oauth2-resource-server
+  + .oauth2ResourceServer(oauth2 -> oauth2.jwt(...))
+  + spring.security.oauth2.resourceserver.jwt.issuer-uri=…
+  + STATELESS + csrf.disable() (typical for Bearer APIs)
+  + same authorizeHttpRequests / @PreAuthorize
+```
+
+| Property | Meaning |
+|----------|---------|
+| `issuer-uri` | Trust this AS; discover JWKS; check `iss` |
+| `jwk-set-uri` | Direct public keys for signature verify |
+
+RS never needs AS private key or user password DB.
+
+---
+
+## Authorities source (the Q3 lock)
+
+| AuthN style | Where authorities come from |
+|-------------|----------------------------|
+| Basic + UserDetailsService | Your user store / `.roles(...)` |
+| JWT Resource Server | **JWT claims** (`scope`/`scp`/`roles`/…) → Authentication |
+
+AuthZ still reads SecurityContext only.  
+If claims don’t become `ROLE_ADMIN`, `hasRole("ADMIN")` fails even when JWT is valid → often need **JwtAuthenticationConverter**.
+
+Valid token ≠ allowed operation: signature OK is AuthN; role check is AuthZ (**403**).
+
+---
+
+## Days 31–35 in one line each
+
+| Day | Lock |
+|-----|------|
+| 31 | FilterChainProxy → SecurityFilterChain → filter order |
+| 32 | Manager → Provider → UserDetails → SecurityContext |
+| 33 | AuthorizationFilter; EntryPoint 401 vs AccessDeniedHandler 403; `@PreAuthorize` proxy |
+| 34 | Stateless Bearer/JWT architecture; AuthZ unchanged |
+| 35 | OAuth2 RS = Spring validates JWT from AS |
+
+---
+
+## Interview name fixes (from drill)
+
+| Wrong / fuzzy | Right |
+|---------------|-------|
+| “ExceptionHandler” for 401/403 | **AuthenticationEntryPoint** (401), **AccessDeniedHandler** (403); chosen by **ExceptionTranslationFilter** |
+| Basic app = OAuth2 RS | Basic = password AuthN; OAuth2 RS = Bearer JWT AuthN |
+
+---
+
+## Hard rules
+
+1. AS issues tokens; RS validates them; Client sends Bearer.
+2. `oauth2ResourceServer().jwt()` fills the AuthN filter slot (like Basic did).
+3. AuthZ rules stay the same if authorities end up correctly in SecurityContext.
+4. Claim mapping is the usual production glue (`SCOPE_…` vs `ROLE_…`).
+5. Bad/expired/wrong-issuer token → **401**; known principal, missing permission → **403**.
+
+---
+
+## 90-second interview answer
+
+> In OAuth2 the Client calls our API with a Bearer JWT issued by an Authorization Server. Our Spring app is the Resource Server: oauth2-resource-server validates signature and issuer via JWKS from issuer-uri, puts Authentication into SecurityContext, then AuthorizationFilter and @PreAuthorize run as usual. We don’t check the user’s password on each API call — the AS already did that when issuing the token. Authorities often come from JWT claims, so claim-to-ROLE mapping must match hasRole. 401 means unauthenticated/invalid token; 403 means authenticated but not allowed.
+
+---
+
+## Security deep-dive — COMPLETE ✅
+
+```text
+31 Architecture → 32 AuthN → 33 AuthZ → 34 JWT architecture → 35 Resource Server
+```
+
+Still optional later: live Keycloak/Auth0 issuer, JwtAuthenticationConverter hands-on, Day 28 testing resume.
+
+Mark Jira **Done**.
