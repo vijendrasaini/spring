@@ -9,6 +9,7 @@ import org.springframework.security.config.annotation.authentication.configurati
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -16,6 +17,9 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+
+import com.vijendra.filter.security.JwtAuthenticationFilter;
 
 @Configuration
 @EnableWebSecurity() //debug = true
@@ -48,19 +52,20 @@ public class SecurityConfig {
     // }
 
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http) {
+    SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthenticationFilter jwtAuthenticationFilter) {
         http.csrf(csrf -> csrf.disable())
+            .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                     .requestMatchers(HttpMethod.POST, "/auth/register").permitAll()
                     .requestMatchers(HttpMethod.POST, "/auth/login").permitAll()
-                    .requestMatchers(HttpMethod.GET, "/employees", "/employees/**").permitAll()
+                    .requestMatchers(HttpMethod.GET, "/employees", "/employees/**").hasAnyRole("USER", "ADMIN")
                     .requestMatchers(HttpMethod.DELETE, "/employees/**").hasRole("ADMIN")
                     .requestMatchers(HttpMethod.POST, "/employees").hasAnyRole("USER", "ADMIN")
                     .requestMatchers(HttpMethod.PATCH, "/employees/**").hasAnyRole("USER", "ADMIN")
                     .requestMatchers("/actuator/health").permitAll()
                     .requestMatchers("/error").permitAll()
                     .anyRequest().authenticated())
-            .httpBasic(Customizer.withDefaults());
+            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
