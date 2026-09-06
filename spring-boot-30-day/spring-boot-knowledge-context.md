@@ -7935,4 +7935,9 @@ Jira ticket: created.
 - Design: `app_users`, email as username, BCrypt in `password_hash`, simple `roles` column.
 - User wrote `V3__create_app_users.sql` — needs `AUTO_INCREMENT` fix + `enabled` column.
 
-# Day 36 Experiment 2 — Entity + Repository + fix migration 🚧 NEXT
+# Day 36 Experiment 2 — Entity + Repository + fix migration ✅ DONE
+
+- `V3__create_app_users.sql` with `enabled`.
+- `AppUserEntity` + `AppUserRepository.findByEmail`.
+
+# Day 36 Experiment 3 — UserDetailsService + seed + wire Security 🚧 NEXT
