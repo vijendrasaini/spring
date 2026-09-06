@@ -6970,6 +6970,7 @@ Jira ticket: created.
 # Day 31 Experiment 1 — Architecture + see filters ✅ DONE
 
 - FilterChainProxy vs SecurityFilterChain vs Filters.
+- **Later refinement (merged notes):** Tomcat registers **DelegatingFilterProxy** → delegates to **FilterChainProxy** bean; Security filters run on internal **VirtualFilterChain** (not Tomcat-registered one-by-one).
 - Filters created by `http.build()`, not handwritten `Filter` classes.
 - `@EnableWebSecurity(debug = true)` printed chain:
   `DisableEncodeUrlFilter, WebAsyncManagerIntegrationFilter, SecurityContextHolderFilter, HeaderWriterFilter, LogoutFilter, BasicAuthenticationFilter, RequestCacheAwareFilter, SecurityContextHolderAwareRequestFilter, AnonymousAuthenticationFilter, ExceptionTranslationFilter, AuthorizationFilter`
@@ -6979,46 +6980,137 @@ Jira ticket: created.
 
 - Q1: AuthorizationFilter after Basic — need identity before AuthZ. ✅
 - Q2: No CsrfFilter — disabled. ✅
-- Q3: Printed list = filters **inside** SecurityFilterChain; FilterChainProxy is the outer servlet filter (not in that list). ✅
+- Q3: Printed list = filters **inside** SecurityFilterChain; outer path is DFP → FilterChainProxy (not in that debug list). ✅
 
 ---
 
 # Day 31 — God-Level Notes (Notebook)
 
-## Big picture
+## Big picture — two nested pipelines
+
+Security sits on the **Servlet Filter** mechanism, but Tomcat does **not** register every Security filter.
 
 ```text
-HTTP → Tomcat → FilterChainProxy → SecurityFilterChain (ordered Filters)
-     → DispatcherServlet → @RestController
+OUTER (Servlet container)
+  Tomcat
+    → DelegatingFilterProxy          ← ONLY this Security entry is registered with Tomcat
+        → FilterChainProxy           ← Spring bean springSecurityFilterChain
+            → matching SecurityFilterChain
+                → Security Filters (internal / VirtualFilterChain)
+                    → rest of Servlet chain → DispatcherServlet → @RestController
 ```
 
-Security is a **servlet Filter layer** in front of MVC. Controllers stay unchanged.
+```text
+INNER (Spring Security)
+  FilterChainProxy
+    → first matching SecurityFilterChain
+    → ordered List<Filter> via VirtualFilterChain
+    → then continue outer Servlet chain
+```
+
+Controllers stay unchanged. Security is a filter layer **in front of** MVC.
 
 ---
 
-## Three names (never mix)
+## Four names (never mix) — corrected model
 
-| Name | Role |
-|------|------|
-| **FilterChainProxy** | The **one** Servlet filter registered with Tomcat (`springSecurityFilterChain`). Front door. |
-| **SecurityFilterChain** | Your `@Bean` — ordered list of Security filters + URL matching. Checklist behind the door. |
-| **Filter** (e.g. Basic, Authorization) | One step in that checklist. Created by `HttpSecurity` DSL + `build()`. |
+| Object | Servlet Filter? | Registered with Tomcat? | Job |
+|--------|-----------------|-------------------------|-----|
+| **`DelegatingFilterProxy`** | YES | **YES** | Bridge Tomcat → Spring bean |
+| **`FilterChainProxy`** | YES (implements Filter) | **NO** (invoked by DFP) | Select + execute matching chain |
+| **`SecurityFilterChain`** | NO | NO | Matcher + ordered list of Security filters |
+| **Security Filters** (Basic, Authorization, …) | YES (implements Filter) | **NO** | One step; run by FCP’s **internal** chain |
 
-**Debug list** (`@EnableWebSecurity(debug=true)`) shows **SecurityFilterChain** contents — **not** FilterChainProxy itself.
+```text
+DelegatingFilterProxy  → delegates (Tomcat-facing bridge)
+FilterChainProxy       → selects + executes
+SecurityFilterChain    → defines (which URLs + which filters)
+VirtualFilterChain     → internal runner that calls filters in order
+HttpSecurity           → builder; http.build() → SecurityFilterChain
+```
+
+**Common trap (old Day 31 shorthand):** saying “FilterChainProxy is registered with Tomcat.”  
+More precise: **Tomcat registers `DelegatingFilterProxy`**; DFP looks up bean **`springSecurityFilterChain`** (the `FilterChainProxy`) and delegates to it.
+
+**Debug list** (`@EnableWebSecurity(debug=true)`) shows **SecurityFilterChain** filter contents — not DFP/FCP themselves.
 
 ---
 
-## How filters appear without writing `implements Filter`
+## Why Security filters are not Tomcat-registered one-by-one
+
+A class can implement `javax/jakarta.servlet.Filter` and still **not** be a Tomcat-registered filter.
+
+```text
+Tomcat registers:     DelegatingFilterProxy
+Tomcat does NOT:      BasicAuthenticationFilter, AuthorizationFilter, …
+
+FilterChainProxy uses VirtualFilterChain roughly like:
+  next = filters.get(position++)
+  next.doFilter(request, response, this)   // "this" = internal chain
+```
+
+So Security filters run **inside** Spring Security’s pipeline, then control returns to the outer Servlet chain (toward DispatcherServlet).
+
+---
+
+## How Boot wires the entry point
+
+```text
+spring-boot-starter-security
+  → security auto-configuration (not “scan every JAR for @Configuration”)
+  → FilterRegistrationBean<DelegatingFilterProxy>
+  → Tomcat registers DFP
+  → DFP → bean "springSecurityFilterChain" (FilterChainProxy)
+```
+
+You normally do **not** write `FilterRegistrationBean` yourself for Security.
+
+**Auto-config ≠ component scan:**  
+- Component scan → your `@Configuration` / `@Service` under the app package.  
+- Auto-config → Boot reads dependency metadata, evaluates conditions, imports infrastructure beans.
+
+---
+
+## HttpSecurity → SecurityFilterChain
+
+You never `new BasicAuthenticationFilter(...)` in normal config.
+
+```text
+HttpSecurity (builder)
+  .httpBasic()              → contributes BasicAuthenticationFilter
+  .authorizeHttpRequests()  → contributes AuthorizationFilter
+  .csrf(disable)            → no CsrfFilter
+  .build()
+       ↓
+SecurityFilterChain = RequestMatcher + ordered List<Filter>
+```
 
 | Your config | What gets added |
 |-------------|-----------------|
-| `spring-boot-starter-security` | Registers FilterChainProxy in container |
-| `@Bean SecurityFilterChain` + `http.build()` | Builds internal filter list |
+| `@Bean SecurityFilterChain` + `http.build()` | Builds the inner filter list |
 | `.httpBasic(...)` | **BasicAuthenticationFilter** |
 | `.authorizeHttpRequests(...)` | **AuthorizationFilter** |
 | `.csrf(disable)` | **No** CsrfFilter |
 
-Config → Spring instantiates filters. Not hidden magic — generated.
+---
+
+## Multiple SecurityFilterChains (awareness)
+
+One chain (what you have) is fine:
+
+```text
+FilterChainProxy → [ SFC #1  (any request) ]
+```
+
+Production apps often split:
+
+```text
+FilterChainProxy
+  ├── @Order(1) SFC → /api/**     (e.g. JWT / Basic)
+  └── @Order(2) SFC → /admin/**   (e.g. formLogin)
+```
+
+FCP uses the **first matching** `SecurityFilterChain` — **order matters** (`@Order`, `securityMatcher(...)`).
 
 ---
 
@@ -7054,14 +7146,19 @@ AuthorizationFilter             → AUTHORIZATION (allowed?)
 
 Cleared after request so threads don’t leak identity.
 
+AuthN object model (Manager / Provider / UserDetails) → **Day 32**.  
+AuthZ / EntryPoint vs AccessDeniedHandler / `@PreAuthorize` → **Day 33**.
+
 ---
 
 ## 401 vs 403 (in the chain)
 
 | Status | Meaning | Typical stage |
 |--------|---------|----------------|
-| **401** | Not authenticated | AuthN missing/failed → ExceptionTranslationFilter / EntryPoint |
-| **403** | Authenticated, not allowed | AuthorizationFilter deny → AccessDeniedHandler |
+| **401** | Not authenticated | AuthN missing/failed → ExceptionTranslationFilter / **AuthenticationEntryPoint** |
+| **403** | Authenticated, not allowed | AuthorizationFilter deny → **AccessDeniedHandler** |
+
+Not `@ExceptionHandler` / `@ControllerAdvice` — those are MVC exception mapping (Day 11). Security has its own handlers.
 
 ---
 
@@ -7074,20 +7171,33 @@ URL rules     → AuthorizationFilter (before controller)
 
 ---
 
+## Who executes what? (cheat sheet)
+
+| Thing | Who executes it? | Registered with Tomcat? |
+|-------|------------------|-------------------------|
+| DelegatingFilterProxy | Tomcat | YES |
+| FilterChainProxy | DelegatingFilterProxy | NO |
+| SecurityFilterChain | Used by FilterChainProxy | NO |
+| Security Filters | FCP’s VirtualFilterChain | NO |
+| DispatcherServlet | Servlet container (after filters) | YES (as servlet) |
+
+---
+
 ## Hard rules (memorize)
 
-1. **FilterChainProxy** = servlet door; **SecurityFilterChain** = ordered checklist.
-2. You configure DSL; **`build()`** creates Filters.
-3. See list: `@EnableWebSecurity(debug = true)` (dev only).
-4. AuthN filters **before** AuthZ filter.
-5. Current user = **SecurityContextHolder** (ThreadLocal).
-6. Debug print ≠ FilterChainProxy; it prints inner chain.
+1. **DFP** = Tomcat bridge; **FCP** = select + run chain; **SFC** = matcher + filter list.
+2. Security filters are **not** individually registered with Tomcat — internal VirtualFilterChain runs them.
+3. You configure DSL; **`http.build()`** creates the ordered Filters.
+4. See list: `@EnableWebSecurity(debug = true)` (dev only) — prints inner SFC filters.
+5. AuthN filters **before** AuthZ filter.
+6. Current user = **SecurityContextHolder** (ThreadLocal).
+7. Multiple SFCs: **first match wins** — order matters.
 
 ---
 
 ## 90-second interview answer
 
-> Spring Security registers a FilterChainProxy in front of DispatcherServlet. That proxy runs a SecurityFilterChain — filters built from SecurityFilterChain bean. BasicAuthenticationFilter authenticates and stores Authentication in SecurityContextHolder. AuthorizationFilter enforces URL rules. ExceptionTranslationFilter maps failures to 401/403. Method security is a later AOP check on the service.
+> Tomcat invokes DelegatingFilterProxy, which delegates to the Spring bean FilterChainProxy (springSecurityFilterChain). That proxy picks the first matching SecurityFilterChain and runs its filters on an internal VirtualFilterChain — those filters are not registered one-by-one with Tomcat. HttpSecurity.build() creates that ordered list. BasicAuthenticationFilter authenticates into SecurityContextHolder; AuthorizationFilter enforces URL rules; ExceptionTranslationFilter maps failures to AuthenticationEntryPoint (401) or AccessDeniedHandler (403). Method security is a later AOP check on the service.
 
 ---
 
@@ -7691,7 +7801,7 @@ Jira ticket: created.
 
 # Day 35 Experiment 3 — Senior interview drill ✅ DONE
 
-1. FilterChainProxy = Security’s Servlet filter entry; SecurityFilterChain = ordered list of Security filters.
+1. DelegatingFilterProxy → FilterChainProxy → SecurityFilterChain (ordered Security filters).
 2. Manager orchestrates; Provider performs identity check (ProviderManager implements AuthenticationManager).
 3. 401 → AuthenticationEntryPoint; 403 → AccessDeniedHandler (via ExceptionTranslationFilter) — not `@ExceptionHandler`.
 4. Employee API in Day 35 design = **Resource Server**; Basic today ≈ protect APIs + check password yourself (not OAuth2 RS yet).
@@ -7755,7 +7865,7 @@ Valid token ≠ allowed operation: signature OK is AuthN; role check is AuthZ (*
 
 | Day | Lock |
 |-----|------|
-| 31 | FilterChainProxy → SecurityFilterChain → filter order |
+| 31 | DFP → FilterChainProxy → SecurityFilterChain / VirtualFilterChain; filter order |
 | 32 | Manager → Provider → UserDetails → SecurityContext |
 | 33 | AuthorizationFilter; EntryPoint 401 vs AccessDeniedHandler 403; `@PreAuthorize` proxy |
 | 34 | Stateless Bearer/JWT architecture; AuthZ unchanged |
@@ -7794,6 +7904,35 @@ Valid token ≠ allowed operation: signature OK is AuthN; role check is AuthZ (*
 31 Architecture → 32 AuthN → 33 AuthZ → 34 JWT architecture → 35 Resource Server
 ```
 
-Still optional later: live Keycloak/Auth0 issuer, JwtAuthenticationConverter hands-on, Day 28 testing resume.
+Optional later when you choose: live IdP / JwtAuthenticationConverter hands-on.
 
 Mark Jira **Done**.
+
+---
+
+# Day 36 — DB-backed AuthN (email + password + UserDetailsService) 🚧 IN PROGRESS
+
+## Day 36 Objective
+
+Connect:
+
+```text
+Days 29–35 — Security architecture, AuthN, AuthZ, JWT ideas (in-memory users)
+        ↓
+Day 36 — Own users in MySQL: email + BCrypt hash + roles → UserDetailsService → keep HTTP Basic
+```
+
+Core question:
+
+> **How do I replace InMemoryUserDetailsManager with a real user store so Basic Auth uses email + password from the database — without changing AuthZ?**
+
+Jira ticket: created.
+
+---
+
+# Day 36 Experiment 1 — User store design (teach first) ✅ DONE (migration draft)
+
+- Design: `app_users`, email as username, BCrypt in `password_hash`, simple `roles` column.
+- User wrote `V3__create_app_users.sql` — needs `AUTO_INCREMENT` fix + `enabled` column.
+
+# Day 36 Experiment 2 — Entity + Repository + fix migration 🚧 NEXT
