@@ -24,26 +24,26 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
-    @Bean
-    public UserDetailsService userDetailsService(PasswordEncoder passwordEncoder) {
-        UserDetails user = User.builder()
-                .username("vijendra")
-                .password(passwordEncoder.encode("vijendra@1234"))
-                .roles("USER")
-                .build();
+    // @Bean
+    // public UserDetailsService userDetailsService(PasswordEncoder passwordEncoder) {
+    //     UserDetails user = User.builder()
+    //             .username("vijendra")
+    //             .password(passwordEncoder.encode("vijendra@1234"))
+    //             .roles("USER")
+    //             .build();
 
-        UserDetails admin = User.builder()
-                .username("admin")
-                .password(passwordEncoder.encode("admin@1234"))
-                .roles("USER", "ADMIN")
-                .build();
+    //     UserDetails admin = User.builder()
+    //             .username("admin")
+    //             .password(passwordEncoder.encode("admin@1234"))
+    //             .roles("USER", "ADMIN")
+    //             .build();
 
-        UserDetailsService userDetailsService = new InMemoryUserDetailsManager(user, admin);
-        // UserDetails userDetails = userDetailsService.loadUserByUsername("vijendra");
-        // // just for my experiment
+    //     UserDetailsService userDetailsService = new InMemoryUserDetailsManager(user, admin);
+    //     // UserDetails userDetails = userDetailsService.loadUserByUsername("vijendra");
+    //     // // just for my experiment
 
-        return userDetailsService;
-    }
+    //     return userDetailsService;
+    // }
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http) {
