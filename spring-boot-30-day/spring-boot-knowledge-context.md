@@ -7910,7 +7910,7 @@ Mark Jira **Done**.
 
 ---
 
-# Day 36 — DB-backed AuthN (email + password + UserDetailsService) 🚧 IN PROGRESS (register add-on)
+# Day 36 — DB-backed AuthN (email + password + UserDetailsService) ✅ DONE
 
 ## Day 36 Objective
 
@@ -7951,6 +7951,14 @@ Jira ticket: created.
 
 ---
 
+# Day 36 Experiment 4 — POST /auth/register ✅ DONE
+
+- `POST /auth/register` public; `RegisterRequest` + register in `DBUserDetailsService`; duplicate → 409.
+- Gotcha: empty/invalid body → `/error` was protected → **401**; fixed with `.requestMatchers("/error").permitAll()`.
+- `/error` permitAll so AuthZ failures on the error dispatch don’t mask real 400/409.
+
+---
+
 # Day 36 — God-Level Notes (Notebook)
 
 ## What changed
@@ -7958,6 +7966,7 @@ Jira ticket: created.
 ```text
 BEFORE: InMemoryUserDetailsManager (hardcoded users)
 AFTER:  app_users (MySQL) → DBUserDetailsService → same Basic + AuthZ
+        + POST /auth/register (public signup)
 ```
 
 ```text
@@ -7970,6 +7979,15 @@ Basic email:password
   → AuthorizationFilter / @PreAuthorize  (unchanged)
 ```
 
+Register:
+
+```text
+POST /auth/register (permitAll)
+  → validate body
+  → existsByEmail? → 409
+  → encode password → save app_users
+```
+
 ---
 
 ## Pieces you built
@@ -7977,54 +7995,88 @@ Basic email:password
 | Piece | Role |
 |-------|------|
 | `V3__create_app_users.sql` | `email`, `password_hash`, `enabled`, `roles` |
-| `AppUserEntity` + `AppUserRepository` | Persist / `findByEmail` |
-| `DBUserDetailsService` | Bridge DB → Spring `UserDetails` |
-| `UserSeeder` | Idempotent seed with `passwordEncoder.encode(...)` |
-| `SecurityConfig` | Keep `PasswordEncoder` + URL AuthZ + Basic; no in-memory users |
+| `AppUserEntity` + `AppUserRepository` | Persist / `findByEmail` / `existsByEmail` |
+| `DBUserDetailsService` | Load user + `register(...)` |
+| `UserSeeder` | Idempotent seed with BCrypt |
+| `AuthController` | `POST /auth/register` |
+| `SecurityConfig` | Basic + AuthZ; `permitAll` for register, health, GET employees, **`/error`** |
 
 ---
 
-## Critical rules (you hit these in code)
+## Critical rules
 
 1. **Email = username** for `loadUserByUsername`.
-2. Store **BCrypt hash**; in `UserDetails` pass hash **as-is** — never `encode()` again on load.
-3. DB roles = `USER` / `USER,ADMIN` — `.roles(...)` adds `ROLE_` prefix.
-4. AuthZ (`hasRole`, `@PreAuthorize`) **does not change** when user source becomes DB.
-5. Prefer Java seeder for passwords — don’t hand-paste BCrypt into Flyway unless you generated it correctly.
-6. **`enabled`:** Java `boolean` defaults to `false`. Seeder should `setEnabled(true)` explicitly so you don’t rely on SQL DEFAULT (JPA often sends the Java value and overrides DB default).
-
----
-
-## Polish (optional, not blockers)
-
-- Trim role parts: `"USER, ADMIN"` → trim after `split(",")`.
-- Set `roles` explicitly for every seeded user (`USER` vs `USER,ADMIN`).
-- Delete commented in-memory block + unused imports in `SecurityConfig`.
-- Turn off `@EnableWebSecurity(debug = true)` for normal runs.
+2. Store **BCrypt hash**; on load pass hash **as-is** — never `encode()` again.
+3. DB roles = `USER` / `USER,ADMIN` — `.roles(...)` adds `ROLE_`.
+4. AuthZ unchanged when user source becomes DB.
+5. Seed/register with `PasswordEncoder.encode` — never store plain passwords.
+6. **`enabled`:** Java `boolean` defaults to `false` — set explicitly. If register saves `enabled=false`, Basic login will fail until enabled.
+7. **`/error` + Security:** public API can still return **401** if `/error` is authenticated — always `permitAll` `/error` (or handle exceptions without error dispatch issues).
 
 ---
 
 ## Hard rules
 
 1. You own identity → user table + `UserDetailsService`.
-2. Provider still verifies password; your service only **loads** the user.
+2. Provider verifies password; your service **loads** (and register **creates**) users.
 3. Same SecurityContext → same AuthZ.
-4. Disable account with `enabled=false` without deleting the row.
+4. Public register ≠ logged in — client still authenticates (Basic today; JWT later).
 
 ---
 
 ## 90-second interview answer
 
-> We replaced in-memory users with an app_users table (email, BCrypt hash, enabled, roles). A custom UserDetailsService loads by email and builds UserDetails. DaoAuthenticationProvider still checks the password with PasswordEncoder. HTTP Basic and authorizeHttpRequests / @PreAuthorize stayed the same — only the user source changed. Seeding uses PasswordEncoder.encode so we never store plain passwords.
+> We replaced in-memory users with app_users and a DB UserDetailsService. Register is a public POST that validates input, rejects duplicate emails with 409, and stores a BCrypt hash. Login still uses HTTP Basic against that store; URL and method authorization stayed the same. A common pitfall: failures on a public endpoint forwarding to /error can look like 401 unless /error is also permitAll.
 
 ---
 
 ## What's next (when you want)
 
-Still on Day 36: **Experiment 4 — `POST /auth/register`**.
-
-After that (later days): Login → JWT; roles join table.
+- **Day 37** — Login → JWT (in progress)  
+- **Roles join table** — replace comma-separated `roles`  
+- Set `enabled=true` on register (or add verify-email flow) if new users must log in immediately  
 
 ---
 
-# Day 36 Experiment 4 — POST /auth/register 🚧 NEXT
+# Day 37 — Auth login + JWT (Bearer / STATELESS) 🚧 IN PROGRESS
+
+## Day 37 Objective
+
+Connect:
+
+```text
+Day 36 — app_users + register + Basic
+Days 34–35 — JWT architecture / Resource Server idea
+        ↓
+Day 37 — POST /auth/login → JWT; APIs use Authorization: Bearer
+```
+
+Core question:
+
+> **How do I verify email+password once, issue a signed JWT, and on later requests validate that Bearer token into SecurityContext so AuthZ stays the same?**
+
+Jira ticket: created.
+
+---
+
+# Day 37 Experiment 1 — Login + JWT flow + approach (teach first) ✅ DONE
+
+- AuthZ independent of Basic vs JWT; login = permitAll; expired JWT → 401.
+- Approach: JJWT + JwtService + JwtAuthenticationFilter; STATELESS.
+
+# Day 37 Experiment 2 — JJWT dependency + JWT properties ✅ DONE
+
+- jjwt-api / jjwt-impl / jjwt-jackson 0.12.6
+- `app.jwt.secret` + `app.jwt.expiration-ms` in `application-dev.properties`
+
+# Day 37 Experiment 3 — JwtProperties + JwtService ✅ DONE
+
+- `JwtProperties` bound from `app.jwt.*` (setters required for binding).
+- `JwtService` generate/parse with JJWT — fix: must be a Spring bean (`@Service`); `expirationMs` as `long` or parse String; `generateToken` public.
+
+# Day 37 Experiment 4 — POST /auth/login + AuthenticationManager ✅ DONE
+
+- `AuthService.login` → AuthenticationManager + JwtService; controller stays thin.
+- Verified: login returns JWT in response.
+
+# Day 37 Experiment 5 — JwtAuthenticationFilter + STATELESS 🚧 NEXT

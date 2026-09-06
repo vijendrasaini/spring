@@ -47,7 +47,7 @@ public class DBUserDetailsService implements UserDetailsService {
         AppUserEntity appUserEntity = new AppUserEntity();
         appUserEntity.setEmail(username.toLowerCase());
         appUserEntity.setPasswordHash(this.passwordEncoder.encode(registerRequest.getPassword()));
-        appUserEntity.setEnabled(false);
+        appUserEntity.setEnabled(true);
         this.appUserRepository.save(appUserEntity);
     }
 

@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
-import com.vijendra.dao.ErrorResponse;
+import com.vijendra.dto.ErrorResponse;
 import com.vijendra.exception.UserNameAlreadyExistsException;
 
 @RestControllerAdvice
