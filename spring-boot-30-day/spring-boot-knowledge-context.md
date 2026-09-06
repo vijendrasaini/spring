@@ -8032,13 +8032,14 @@ POST /auth/register (permitAll)
 
 ## What's next (when you want)
 
-- **Day 37** — Login → JWT (in progress)  
+- **Day 37** — Login → JWT ✅ DONE  
 - **Roles join table** — replace comma-separated `roles`  
 - Set `enabled=true` on register (or add verify-email flow) if new users must log in immediately  
+- Refresh tokens (optional)
 
 ---
 
-# Day 37 — Auth login + JWT (Bearer / STATELESS) 🚧 IN PROGRESS
+# Day 37 — Auth login + JWT (Bearer / STATELESS) ✅ DONE
 
 ## Day 37 Objective
 
@@ -8079,4 +8080,72 @@ Jira ticket: created.
 - `AuthService.login` → AuthenticationManager + JwtService; controller stays thin.
 - Verified: login returns JWT in response.
 
-# Day 37 Experiment 5 — JwtAuthenticationFilter + STATELESS 🚧 NEXT
+# Day 37 Experiment 5 — JwtAuthenticationFilter + STATELESS ✅ DONE
+
+- `JwtAuthenticationFilter` extends `OncePerRequestFilter`; Bearer → claims → SecurityContext.
+- `addFilterBefore(..., UsernamePasswordAuthenticationFilter.class)`; STATELESS; httpBasic removed.
+- Gotchas fixed: null Authorization header; `Bearer ` case; try/catch on parse; GET `/employees` still `permitAll` by design.
+- Verified: login → Bearer on protected APIs; no token on POST/DELETE → 401; AuthZ roles still apply.
+
+---
+
+# Day 37 — God-Level Notes (Notebook)
+
+## End-to-end flow
+
+```text
+POST /auth/login { email, password }
+  → AuthService → AuthenticationManager → DBUserDetailsService + PasswordEncoder
+  → JwtService.generateToken(email, roles)
+  → { token }
+
+Later API:
+  Authorization: Bearer eyJ…
+  → JwtAuthenticationFilter (before UsernamePasswordAuthenticationFilter)
+  → parse/verify JWT → Authentication in SecurityContext
+  → AuthorizationFilter / @PreAuthorize  (unchanged)
+```
+
+You issue **and** validate the JWT in the same app (tiny AS + RS).
+
+---
+
+## Pieces built
+
+| Piece | Role |
+|-------|------|
+| JJWT + `app.jwt.secret` / `expiration-ms` | Sign & verify HS256 |
+| `JwtProperties` | `@ConfigurationProperties` binding (needs setters) |
+| `JwtService` | generate / parse only |
+| `AuthService` | login orchestration (not in controller) |
+| `POST /auth/login` | permitAll; returns token |
+| `JwtAuthenticationFilter` | Bearer → SecurityContext |
+| `SecurityConfig` | STATELESS + `addFilterBefore` + same AuthZ |
+
+---
+
+## Hard rules
+
+1. Password check at **login only**; APIs check **token**.
+2. AuthZ still = path + method + authorities from SecurityContext.
+3. JWT roles claim without `ROLE_`; filter adds `ROLE_` for `hasRole`.
+4. Missing/invalid Bearer on protected route → **401**; wrong role → **403**.
+5. `GET /employees` `permitAll` → works **without** token (by design).
+6. Filter: null-safe header; `Bearer ` prefix; catch parse errors; always `filterChain.doFilter`.
+7. Controller thin; login business logic in `AuthService`.
+
+---
+
+## 90-second interview answer
+
+> Login authenticates email/password via AuthenticationManager against our DB UserDetailsService, then JwtService issues a signed JWT with subject and roles. On each API call, a OncePerRequestFilter reads Authorization Bearer, verifies the JWT, and puts Authentication into SecurityContext. AuthorizationFilter and @PreAuthorize stay the same. Session is STATELESS; we no longer use HTTP Basic for API calls.
+
+---
+
+## What's next (when you want)
+
+- Refresh tokens (optional)
+- Roles as join table
+- `enabled=true` on register / email verify  
+
+Mark Jira **Done**.
