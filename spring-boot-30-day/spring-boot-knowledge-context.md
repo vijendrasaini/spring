@@ -7910,7 +7910,7 @@ Mark Jira **Done**.
 
 ---
 
-# Day 36 — DB-backed AuthN (email + password + UserDetailsService) 🚧 IN PROGRESS
+# Day 36 — DB-backed AuthN (email + password + UserDetailsService) 🚧 IN PROGRESS (register add-on)
 
 ## Day 36 Objective
 
@@ -7920,24 +7920,111 @@ Connect:
 Days 29–35 — Security architecture, AuthN, AuthZ, JWT ideas (in-memory users)
         ↓
 Day 36 — Own users in MySQL: email + BCrypt hash + roles → UserDetailsService → keep HTTP Basic
+        + POST /auth/register (public signup)
 ```
 
 Core question:
 
-> **How do I replace InMemoryUserDetailsManager with a real user store so Basic Auth uses email + password from the database — without changing AuthZ?**
+> **How do I replace InMemoryUserDetailsManager with a real user store so Basic Auth uses email + password from the database — without changing AuthZ?**  
+> **And how do new users register via API instead of only the seeder?**
 
 Jira ticket: created.
 
 ---
 
-# Day 36 Experiment 1 — User store design (teach first) ✅ DONE (migration draft)
+# Day 36 Experiment 1 — User store design (teach first) ✅ DONE
 
-- Design: `app_users`, email as username, BCrypt in `password_hash`, simple `roles` column.
-- User wrote `V3__create_app_users.sql` — needs `AUTO_INCREMENT` fix + `enabled` column.
+- Design: `app_users`, email as username, BCrypt in `password_hash`, `enabled`, simple `roles` column.
+- Flyway `V3__create_app_users.sql` applied.
 
 # Day 36 Experiment 2 — Entity + Repository + fix migration ✅ DONE
 
 - `V3__create_app_users.sql` with `enabled`.
 - `AppUserEntity` + `AppUserRepository.findByEmail`.
 
-# Day 36 Experiment 3 — UserDetailsService + seed + wire Security 🚧 NEXT
+# Day 36 Experiment 3 — UserDetailsService + seed + wire Security ✅ DONE
+
+- `DBUserDetailsService`: email → `AppUserEntity` → `UserDetails` (hash as-is, `.roles(split)`, `.disabled(!enabled)`).
+- Removed in-memory `UserDetailsService` bean; `SecurityFilterChain` AuthZ unchanged + HTTP Basic.
+- `UserSeeder` (`CommandLineRunner`): seeds `vijendra@example.com` + `admin@example.com` with BCrypt if missing.
+- Verified Postman matrix works as expected (DB AuthN + same AuthZ).
+
+---
+
+# Day 36 — God-Level Notes (Notebook)
+
+## What changed
+
+```text
+BEFORE: InMemoryUserDetailsManager (hardcoded users)
+AFTER:  app_users (MySQL) → DBUserDetailsService → same Basic + AuthZ
+```
+
+```text
+Basic email:password
+  → BasicAuthenticationFilter
+  → DaoAuthenticationProvider
+       → DBUserDetailsService.loadUserByUsername(email)
+       → PasswordEncoder.matches(raw, password_hash)
+  → SecurityContext
+  → AuthorizationFilter / @PreAuthorize  (unchanged)
+```
+
+---
+
+## Pieces you built
+
+| Piece | Role |
+|-------|------|
+| `V3__create_app_users.sql` | `email`, `password_hash`, `enabled`, `roles` |
+| `AppUserEntity` + `AppUserRepository` | Persist / `findByEmail` |
+| `DBUserDetailsService` | Bridge DB → Spring `UserDetails` |
+| `UserSeeder` | Idempotent seed with `passwordEncoder.encode(...)` |
+| `SecurityConfig` | Keep `PasswordEncoder` + URL AuthZ + Basic; no in-memory users |
+
+---
+
+## Critical rules (you hit these in code)
+
+1. **Email = username** for `loadUserByUsername`.
+2. Store **BCrypt hash**; in `UserDetails` pass hash **as-is** — never `encode()` again on load.
+3. DB roles = `USER` / `USER,ADMIN` — `.roles(...)` adds `ROLE_` prefix.
+4. AuthZ (`hasRole`, `@PreAuthorize`) **does not change** when user source becomes DB.
+5. Prefer Java seeder for passwords — don’t hand-paste BCrypt into Flyway unless you generated it correctly.
+6. **`enabled`:** Java `boolean` defaults to `false`. Seeder should `setEnabled(true)` explicitly so you don’t rely on SQL DEFAULT (JPA often sends the Java value and overrides DB default).
+
+---
+
+## Polish (optional, not blockers)
+
+- Trim role parts: `"USER, ADMIN"` → trim after `split(",")`.
+- Set `roles` explicitly for every seeded user (`USER` vs `USER,ADMIN`).
+- Delete commented in-memory block + unused imports in `SecurityConfig`.
+- Turn off `@EnableWebSecurity(debug = true)` for normal runs.
+
+---
+
+## Hard rules
+
+1. You own identity → user table + `UserDetailsService`.
+2. Provider still verifies password; your service only **loads** the user.
+3. Same SecurityContext → same AuthZ.
+4. Disable account with `enabled=false` without deleting the row.
+
+---
+
+## 90-second interview answer
+
+> We replaced in-memory users with an app_users table (email, BCrypt hash, enabled, roles). A custom UserDetailsService loads by email and builds UserDetails. DaoAuthenticationProvider still checks the password with PasswordEncoder. HTTP Basic and authorizeHttpRequests / @PreAuthorize stayed the same — only the user source changed. Seeding uses PasswordEncoder.encode so we never store plain passwords.
+
+---
+
+## What's next (when you want)
+
+Still on Day 36: **Experiment 4 — `POST /auth/register`**.
+
+After that (later days): Login → JWT; roles join table.
+
+---
+
+# Day 36 Experiment 4 — POST /auth/register 🚧 NEXT

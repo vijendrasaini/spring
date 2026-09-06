@@ -14,8 +14,8 @@ public class AppUserEntity {
     private long id;
     private String email;
     private String passwordHash;
-    private boolean enabled;
-    private String roles;
+    private boolean enabled = false;
+    private String roles = "USER";
 
     public long getId() {
         return id;

@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import com.vijendra.dao.ErrorResponse;
+import com.vijendra.exception.UserNameAlreadyExistsException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -52,5 +53,10 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(NoSuchElementException.class)
     public ResponseEntity<ErrorResponse> handleNoSuchElement(NoSuchElementException exception) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ErrorResponse(404, exception.getMessage()));
+    }
+
+    @ExceptionHandler(UserNameAlreadyExistsException.class)
+    public ResponseEntity<ErrorResponse> handleNoSuchElement(UserNameAlreadyExistsException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponse(409, exception.getMessage()));
     }
 }

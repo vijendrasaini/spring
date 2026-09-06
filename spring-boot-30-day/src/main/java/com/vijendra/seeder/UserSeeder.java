@@ -28,10 +28,15 @@ public class UserSeeder implements CommandLineRunner {
         for (String email : emails) {
             Optional<AppUserEntity> found = this.appUserRepository.findByEmail(email);
             if (found.isEmpty()) {
+                System.out.println("====================USER SEEDER: Seeding {%s}====================".formatted(email));
                 AppUserEntity appUserEntity = new AppUserEntity();
 
                 appUserEntity.setEmail(email);
                 appUserEntity.setPasswordHash(this.passwordEncoder.encode(DEFAULT_PASSWORD));
+                if(email.contains("admin")) {
+                    appUserEntity.setRoles("USER,ADMIN");
+                }
+                this.appUserRepository.save(appUserEntity);
             }
         }
     }

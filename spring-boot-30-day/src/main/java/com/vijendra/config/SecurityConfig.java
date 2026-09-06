@@ -16,7 +16,7 @@ import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration
-@EnableWebSecurity(debug = true)
+@EnableWebSecurity() //debug = true
 @EnableMethodSecurity
 public class SecurityConfig {
     @Bean
@@ -49,11 +49,13 @@ public class SecurityConfig {
     SecurityFilterChain securityFilterChain(HttpSecurity http) {
         http.csrf(csrf -> csrf.disable())
             .authorizeHttpRequests(auth -> auth
+                    .requestMatchers(HttpMethod.POST, "/auth/register").permitAll()
                     .requestMatchers(HttpMethod.GET, "/employees", "/employees/**").permitAll()
                     .requestMatchers(HttpMethod.DELETE, "/employees/**").hasRole("ADMIN")
                     .requestMatchers(HttpMethod.POST, "/employees").hasAnyRole("USER", "ADMIN")
                     .requestMatchers(HttpMethod.PATCH, "/employees/**").hasAnyRole("USER", "ADMIN")
                     .requestMatchers("/actuator/health").permitAll()
+                    .requestMatchers("/error").permitAll()
                     .anyRequest().authenticated())
             .httpBasic(Customizer.withDefaults());
 

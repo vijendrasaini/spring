@@ -8,4 +8,6 @@ import com.vijendra.entity.AppUserEntity;
 
 public interface AppUserRepository extends JpaRepository<AppUserEntity, Long>{
     Optional<AppUserEntity> findByEmail(String email);
+
+    boolean existsByEmail(String email);
 }
